@@ -11,31 +11,27 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Faltan variables de entorno de Supabase. Revisa .env.local')
-}
-
 // ─── Cliente browser (singleton) ─────────────
-// Usa la anon key — respeta las Row Level Security policies
 let browserClient: ReturnType<typeof createClient> | null = null
 
 export function getSupabaseBrowser() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  if (!url || !key) {
+    throw new Error('Faltan variables de entorno de Supabase. Revisa .env.local')
+  }
   if (browserClient) return browserClient
-  browserClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false }, // app personal, sin auth por ahora
+  browserClient = createClient(url, key, {
+    auth: { persistSession: false },
   })
   return browserClient
 }
 
 // ─── Cliente server (service role) ───────────
-// Usa la service role key — bypasea RLS
-// NUNCA expongas esta key en el browser
 export function getSupabaseServer() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient(url, key, {
     auth: { persistSession: false },
   })
 }
