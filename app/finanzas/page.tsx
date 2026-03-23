@@ -93,15 +93,11 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
 
   return (
     <div className="animate-slide-up">
-      {/* Actions */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      {/* Action */}
+      <div className="flex gap-2 mb-4">
         <button onClick={() => setShowCreate(true)}
           className="btn-glow btn-shimmer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#00d9ff]/10 border border-[#00d9ff]/20 text-[#00d9ff] hover:bg-[#00d9ff]/15 transition-all">
           <Plus size={14} /> Nueva transacción
-        </button>
-        <button onClick={() => setShowCreateRec(true)}
-          className="btn-glow btn-shimmer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 text-[#8b5cf6] hover:bg-[#8b5cf6]/15 transition-all">
-          <Repeat size={14} /> Nuevo fijo
         </button>
       </div>
 
@@ -127,25 +123,40 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
         </div>
       </div>
 
-      {/* ── Gastos/Ingresos fijos ── */}
-      {!loadingRec && (recurrentes ?? []).length > 0 && (
-        <Card className="mb-4" accent="#8b5cf6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Repeat size={13} className="text-[#8b5cf6]" />
-              <h3 className="text-[11px] uppercase tracking-widest text-slate-500 font-medium">Fijos mensuales</h3>
+      {/* ── Gastos/Ingresos fijos (siempre visible) ── */}
+      <Card className="mb-4" accent="#8b5cf6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Repeat size={13} className="text-[#8b5cf6]" />
+            <h3 className="text-[11px] uppercase tracking-widest text-slate-500 font-medium">Fijos mensuales</h3>
+            {(recurrentes ?? []).length > 0 && (
               <span className="font-mono text-[10px] text-slate-600">{formatEuros(totalRecIngresos - totalRecGastos)} neto</span>
-            </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {(recurrentes ?? []).length > 0 && (
+              <button
+                onClick={handleRegistrarTodo}
+                disabled={registrando}
+                className="btn-glow flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/20 hover:bg-[#00ff88]/15 disabled:opacity-50 transition-all"
+              >
+                <Download size={11} /> <span className="hidden sm:inline">{registrando ? 'Registrando...' : 'Registrar este mes'}</span>
+              </button>
+            )}
             <button
-              onClick={handleRegistrarTodo}
-              disabled={registrando}
-              className="btn-glow flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/20 hover:bg-[#00ff88]/15 disabled:opacity-50 transition-all"
+              onClick={() => setShowCreateRec(true)}
+              className="btn-glow btn-shimmer flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] text-[#8b5cf6] bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 hover:bg-[#8b5cf6]/15 transition-all"
             >
-              <Download size={11} /> {registrando ? 'Registrando...' : 'Registrar todo este mes'}
+              <Plus size={11} /> <span className="hidden sm:inline">Añadir fijo</span>
             </button>
           </div>
+        </div>
+        {(recurrentes ?? []).length === 0 ? (
+          <div className="text-center py-4 text-slate-600 text-[12px]">
+            Aún no tienes gastos o ingresos fijos. Añade tus recurrentes (alquiler, sueldo, suscripciones...) para registrarlos cada mes con un click.
+          </div>
+        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Fixed incomes */}
             {recIngresos.length > 0 && (
               <div>
                 <div className="text-[10px] text-[#00ff88] uppercase tracking-wider mb-2">Ingresos fijos — {formatEuros(totalRecIngresos)}</div>
@@ -159,7 +170,6 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
                 ))}
               </div>
             )}
-            {/* Fixed expenses */}
             {recGastos.length > 0 && (
               <div>
                 <div className="text-[10px] text-red-400 uppercase tracking-wider mb-2">Gastos fijos — {formatEuros(totalRecGastos)}</div>
@@ -174,8 +184,8 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
               </div>
             )}
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Chart */}
       <Card className="mb-4">
@@ -282,8 +292,9 @@ function TransaccionFormModal({ open, contexto, onClose, onSaved }: {
       await createTransaccion({ contexto, tipo: form.tipo, importe: Number(form.importe), descripcion: form.descripcion.trim(),
         categoria_personal: contexto === 'personal' ? (form.categoria || null) : null,
         categoria_logika: contexto === 'logika' ? (form.categoria || null) : null, fecha: form.fecha })
-      onSaved(); onClose()
+      await onSaved()
       setForm({ tipo: 'gasto', importe: '', descripcion: '', categoria: '', fecha: format(new Date(), 'yyyy-MM-dd') })
+      onClose()
     } catch (e) { console.error(e) }
     finally { setSaving(false) }
   }
@@ -333,8 +344,9 @@ function RecurrenteFormModal({ open, contexto, onClose, onSaved }: {
       await createTransaccionRecurrente({ contexto, tipo: form.tipo, importe: Number(form.importe), descripcion: form.descripcion.trim(),
         categoria_personal: contexto === 'personal' ? (form.categoria || null) : null,
         categoria_logika: contexto === 'logika' ? (form.categoria || null) : null })
-      onSaved(); onClose()
+      await onSaved()
       setForm({ tipo: 'gasto', importe: '', descripcion: '', categoria: '' })
+      onClose()
     } catch (e) { console.error(e) }
     finally { setSaving(false) }
   }

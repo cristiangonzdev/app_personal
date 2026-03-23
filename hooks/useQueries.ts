@@ -27,8 +27,9 @@ function useQuery<T>(queryFn: () => Promise<T>) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // No borrar data durante refetch — mantener datos previos visibles
   const fetch = useCallback(async () => {
-    setLoading(true)
+    if (data === null) setLoading(true)
     setError(null)
     try {
       const result = await queryFn()
