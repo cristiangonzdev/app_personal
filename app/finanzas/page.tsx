@@ -45,7 +45,7 @@ export default function FinanzasPage() {
 
 function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
   const { data: transacciones, loading, error, refetch } = useTransacciones(contexto)
-  const { data: resumen, loading: loadingResumen } = useResumenMensual(contexto)
+  const { data: resumen, loading: loadingResumen, refetch: refetchResumen } = useResumenMensual(contexto)
   const { data: recurrentes, loading: loadingRec, refetch: refetchRec } = useTransaccionesRecurrentes(contexto)
   const [showCreate, setShowCreate] = useState(false)
   const [showCreateRec, setShowCreateRec] = useState(false)
@@ -74,8 +74,13 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
   const totalRecGastos = recGastos.reduce((a, r) => a + Number(r.importe), 0)
   const totalRecIngresos = recIngresos.reduce((a, r) => a + Number(r.importe), 0)
 
+  // Refresca transacciones + gráfica a la vez
+  async function refetchAll() {
+    await Promise.all([refetch(), refetchResumen()])
+  }
+
   async function handleDeleteTx(id: string) {
-    try { await deleteTransaccion(id); setDeletingId(null); await refetch() }
+    try { await deleteTransaccion(id); setDeletingId(null); await refetchAll() }
     catch (e) { console.error(e) }
   }
 
@@ -86,7 +91,11 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
 
   async function handleRegistrarTodo() {
     setRegistrando(true)
-    try { await registrarRecurrentesDelMes(contexto); await refetch() }
+    try {
+      const count = await registrarRecurrentesDelMes(contexto)
+      if (count === 0) { alert('Todos los fijos ya están registrados este mes.') }
+      await refetchAll()
+    }
     catch (e) { console.error(e) }
     finally { setRegistrando(false) }
   }
@@ -266,8 +275,8 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
       </div>
 
       {/* Modals */}
-      <TransaccionFormModal open={showCreate} contexto={contexto} onClose={() => setShowCreate(false)} onSaved={refetch} />
-      <RecurrenteFormModal open={showCreateRec} contexto={contexto} onClose={() => setShowCreateRec(false)} onSaved={refetchRec} />
+      <TransaccionFormModal open={showCreate} contexto={contexto} onClose={() => setShowCreate(false)} onSaved={refetchAll} />
+      <RecurrenteFormModal open={showCreateRec} contexto={contexto} onClose={() => setShowCreateRec(false)} onSaved={refetchRec} onTxSaved={refetchAll} />
     </div>
   )
 }
@@ -326,8 +335,8 @@ function TransaccionFormModal({ open, contexto, onClose, onSaved }: {
 
 // ─── Recurring Transaction Form ──────────────
 
-function RecurrenteFormModal({ open, contexto, onClose, onSaved }: {
-  open: boolean; contexto: TransaccionContexto; onClose: () => void; onSaved: () => void
+function RecurrenteFormModal({ open, contexto, onClose, onSaved, onTxSaved }: {
+  open: boolean; contexto: TransaccionContexto; onClose: () => void; onSaved: () => void; onTxSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ tipo: 'gasto' as 'ingreso' | 'gasto', importe: '', descripcion: '', categoria: '' })
@@ -341,10 +350,19 @@ function RecurrenteFormModal({ open, contexto, onClose, onSaved }: {
     if (!form.descripcion.trim() || !form.importe) return
     setSaving(true)
     try {
-      await createTransaccionRecurrente({ contexto, tipo: form.tipo, importe: Number(form.importe), descripcion: form.descripcion.trim(),
-        categoria_personal: contexto === 'personal' ? (form.categoria || null) : null,
-        categoria_logika: contexto === 'logika' ? (form.categoria || null) : null })
-      await onSaved()
+      const catP = contexto === 'personal' ? (form.categoria || null) : null
+      const catL = contexto === 'logika' ? (form.categoria || null) : null
+
+      // 1. Guardar como fijo recurrente
+      await createTransaccionRecurrente({ contexto, tipo: form.tipo, importe: Number(form.importe),
+        descripcion: form.descripcion.trim(), categoria_personal: catP, categoria_logika: catL })
+
+      // 2. También registrar como transacción real de este mes
+      await createTransaccion({ contexto, tipo: form.tipo, importe: Number(form.importe),
+        descripcion: form.descripcion.trim(), categoria_personal: catP, categoria_logika: catL,
+        fecha: format(new Date(), 'yyyy-MM-dd') })
+
+      await Promise.all([onSaved(), onTxSaved()])
       setForm({ tipo: 'gasto', importe: '', descripcion: '', categoria: '' })
       onClose()
     } catch (e) { console.error(e) }

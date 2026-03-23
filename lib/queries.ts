@@ -306,15 +306,24 @@ export async function deleteTransaccionRecurrente(id: string): Promise<void> {
   if (error) throw error
 }
 
-// Registrar todas las recurrentes como transacciones del mes actual
+// Registrar recurrentes que aún NO se han registrado este mes
 export async function registrarRecurrentesDelMes(
   contexto: 'personal' | 'logika'
 ): Promise<number> {
   const recurrentes = await getTransaccionesRecurrentes(contexto)
+  const existentes = await getTransacciones(contexto)
   const hoy = format(new Date(), 'yyyy-MM-dd')
+
+  // Crear un set con "descripcion|importe" de lo que ya existe este mes
+  const yaRegistradas = new Set(
+    existentes.map((t) => `${t.descripcion}|${t.importe}`)
+  )
 
   let count = 0
   for (const r of recurrentes) {
+    const key = `${r.descripcion}|${r.importe}`
+    if (yaRegistradas.has(key)) continue // ya registrada este mes
+
     await createTransaccion({
       contexto: r.contexto,
       tipo: r.tipo,
@@ -331,16 +340,18 @@ export async function registrarRecurrentesDelMes(
 
 // ─── RESUMEN MENSUAL ─────────────────────────
 
+// Resumen desde enero del año actual hasta el mes actual
 export async function getResumenMensual(
   contexto: 'personal' | 'logika',
-  meses: number = 6
+  _meses?: number
 ): Promise<ResumenFinanciero[]> {
   const sb = getSupabaseBrowser()
   const resultado: ResumenFinanciero[] = []
+  const ahora = new Date()
+  const mesActual = ahora.getMonth() // 0-based
 
-  for (let i = meses - 1; i >= 0; i--) {
-    const fecha = new Date()
-    fecha.setMonth(fecha.getMonth() - i)
+  for (let i = 0; i <= mesActual; i++) {
+    const fecha = new Date(ahora.getFullYear(), i, 1)
     const mesStr = format(fecha, 'yyyy-MM')
     const desde = `${mesStr}-01`
     const hasta = format(endOfMonth(fecha), 'yyyy-MM-dd')
