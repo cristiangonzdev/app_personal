@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  Line, ComposedChart, Area, Cell
 } from 'recharts'
 import { useTransacciones, useResumenMensual, useTransaccionesRecurrentes } from '@/hooks/useQueries'
 import {
@@ -198,18 +199,56 @@ function FinanzasContexto({ contexto }: { contexto: TransaccionContexto }) {
 
       {/* Chart */}
       <Card className="mb-4">
-        <CardTitle>Evolución 6 meses</CardTitle>
+        <CardTitle>Evolución {new Date().getFullYear()}</CardTitle>
         {loadingResumen ? <LoadingSpinner /> : (
-          <div style={{ height: 200 }}>
+          <div style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={resumen ?? []} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,69,0.5)" vertical={false} />
-                <XAxis dataKey="mes" tickFormatter={formatMes} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}€`} />
-                <Tooltip contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(30,45,69,0.5)', borderRadius: 12, fontSize: 12 }} labelFormatter={formatMes} formatter={(value: number) => [formatEuros(value), '']} />
-                <Bar dataKey="ingresos" fill="#00ff88" radius={[4, 4, 0, 0]} maxBarSize={28} name="Ingresos" />
-                <Bar dataKey="gastos" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} name="Gastos" />
-              </BarChart>
+              <ComposedChart data={resumen ?? []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00ff88" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#00ff88" stopOpacity={0.4} />
+                  </linearGradient>
+                  <linearGradient id="gradGastos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                  </linearGradient>
+                  <linearGradient id="gradBalance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00d9ff" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#00d9ff" stopOpacity={0} />
+                  </linearGradient>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,69,0.3)" vertical={false} />
+                <XAxis
+                  dataKey="mes"
+                  tickFormatter={(v) => formatMes(v).split(' ')[0].toUpperCase()}
+                  tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'var(--font-mono)' }}
+                  axisLine={false} tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 9, fill: '#475569', fontFamily: 'var(--font-mono)' }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : `${v}€`}
+                  width={40}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(0,217,255,0.04)', radius: 8 }} />
+                <Area
+                  type="monotone" dataKey="balance"
+                  fill="url(#gradBalance)" stroke="none"
+                />
+                <Bar dataKey="ingresos" fill="url(#gradIngresos)" radius={[6, 6, 0, 0]} maxBarSize={32} name="Ingresos" />
+                <Bar dataKey="gastos" fill="url(#gradGastos)" radius={[6, 6, 0, 0]} maxBarSize={32} name="Gastos" />
+                <Line
+                  type="monotone" dataKey="balance" stroke="#00d9ff" strokeWidth={2}
+                  dot={{ r: 4, fill: '#060a14', stroke: '#00d9ff', strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: '#00d9ff', stroke: '#060a14', strokeWidth: 2, filter: 'url(#glow)' }}
+                  name="Balance"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -388,5 +427,60 @@ function RecurrenteFormModal({ open, contexto, onClose, onSaved, onTxSaved }: {
         </div>
       </form>
     </Modal>
+  )
+}
+
+// ─── Custom Chart Tooltip ────────────────────
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+
+  const ingresos = payload.find((p: any) => p.dataKey === 'ingresos')?.value ?? 0
+  const gastos = payload.find((p: any) => p.dataKey === 'gastos')?.value ?? 0
+  const balance = ingresos - gastos
+
+  return (
+    <div className="animate-in" style={{ animationDuration: '0.15s' }}>
+      <div
+        className="rounded-xl p-3.5 min-w-[180px]"
+        style={{
+          background: 'rgba(10, 14, 26, 0.92)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(0, 217, 255, 0.15)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(0,217,255,0.08)',
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-widest text-[#00d9ff] font-medium mb-2.5 font-mono">
+          {formatMes(label)}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-[#00ff88]" style={{ boxShadow: '0 0 6px #00ff88' }} />
+              <span className="text-[11px] text-slate-400">Ingresos</span>
+            </div>
+            <span className="font-mono text-[12px] text-[#00ff88] font-medium">{formatEuros(ingresos)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-red-400" style={{ boxShadow: '0 0 6px #ef4444' }} />
+              <span className="text-[11px] text-slate-400">Gastos</span>
+            </div>
+            <span className="font-mono text-[12px] text-red-400 font-medium">{formatEuros(gastos)}</span>
+          </div>
+          <div className="border-t border-[rgba(30,45,69,0.5)] pt-1.5 mt-0.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-[#00d9ff]" style={{ boxShadow: '0 0 6px #00d9ff' }} />
+                <span className="text-[11px] text-slate-300 font-medium">Balance</span>
+              </div>
+              <span className={cn('font-mono text-[13px] font-bold', balance >= 0 ? 'text-[#00d9ff]' : 'text-red-400')}>
+                {balance >= 0 ? '+' : ''}{formatEuros(balance)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

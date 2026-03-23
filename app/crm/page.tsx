@@ -1,19 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { useAllLeads, useProyectos } from '@/hooks/useQueries'
-import { updateLeadEstado, createLead, updateLead, deleteLead } from '@/lib/queries'
+import { useAllLeads, useProyectos, useTransaccionesRecurrentes } from '@/hooks/useQueries'
+import {
+  updateLeadEstado, createLead, updateLead, deleteLead,
+  createTransaccionRecurrente, deleteTransaccionRecurrente, createTransaccion
+} from '@/lib/queries'
 import {
   Card, CardTitle, Badge, PageHeader, LoadingSpinner, EmptyState, ErrorState
 } from '@/components/ui'
 import { Modal, Input, Select, Textarea, Button } from '@/components/ui/Modal'
-import { formatEuros, cn } from '@/lib/utils'
+import {
+  formatEuros, cn,
+  CATEGORIA_LOGIKA_LABELS,
+} from '@/lib/utils'
 import {
   CRM_PIPELINE, ADVANCE_STATE, RETREAT_STATE,
   LEAD_ESTADO_LABELS, PROYECTO_TIPO_LABELS,
 } from '@/types'
-import type { Lead, LeadEstado, LeadOrigen, PipelineColumn, Proyecto } from '@/types'
+import type { Lead, LeadEstado, LeadOrigen, TransaccionRecurrente } from '@/types'
 import { Phone, Mail, ChevronRight, ChevronLeft, X, Plus, Edit3, Trash2, XCircle, Zap } from 'lucide-react'
+import { format } from 'date-fns'
 
 const ORIGEN_OPTIONS = [
   { value: '', label: 'Sin especificar' },
@@ -25,13 +32,13 @@ const ORIGEN_OPTIONS = [
 
 export default function CRMPage() {
   const { data: leads, loading, error, refetch } = useAllLeads()
-  const { data: proyectos } = useProyectos()
+  const { data: recurrentes, refetch: refetchRec } = useTransaccionesRecurrentes('logika')
   const [movingId, setMovingId] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
+  const [showAddCliente, setShowAddCliente] = useState(false)
 
-  // Agrupar leads por columna visual (cada columna agrupa varios estados DB)
   const kanban = CRM_PIPELINE.map((col) => ({
     ...col,
     leads: (leads ?? []).filter((l) => col.dbStates.includes(l.estado)),
@@ -44,9 +51,14 @@ export default function CRMPage() {
   const cerradosGanados = (leads ?? []).filter((l) => l.estado === 'cerrado_ganado').length
   const totalCerrados = (leads ?? []).filter((l) => l.estado === 'cerrado_ganado' || l.estado === 'cerrado_perdido').length
 
-  // Proyectos con MRR = clientes activos (mantenimiento)
-  const clientesMRR = (proyectos ?? []).filter((p) => p.precio_mrr && p.precio_mrr > 0)
-  const totalMRR = clientesMRR.reduce((a, p) => a + Number(p.precio_mrr ?? 0), 0)
+  // Clientes activos = ingresos recurrentes de Logika (sincronizado con Finanzas)
+  const clientesActivos = (recurrentes ?? []).filter((r) => r.tipo === 'ingreso')
+  const totalMRR = clientesActivos.reduce((a, r) => a + Number(r.importe), 0)
+
+  async function handleDeleteCliente(id: string) {
+    try { await deleteTransaccionRecurrente(id); await refetchRec() }
+    catch (e) { console.error(e) }
+  }
 
   async function moverLead(lead: Lead, direccion: 'adelante' | 'atras') {
     const currentCol = CRM_PIPELINE.find((c) => c.dbStates.includes(lead.estado))
@@ -204,27 +216,42 @@ export default function CRMPage() {
           </div>
         </Card>
 
-        {/* Clientes activos (MRR) */}
+        {/* Clientes activos (sincronizado con ingresos fijos Logika) */}
         <Card accent="#00ff88">
-          <CardTitle>
-            Clientes activos — {formatEuros(totalMRR)}/mes
-          </CardTitle>
-          {clientesMRR.length === 0 ? (
-            <EmptyState message="Sin clientes recurrentes aún" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[11px] uppercase tracking-widest text-slate-500 font-medium">
+                Clientes activos
+              </h3>
+              {totalMRR > 0 && (
+                <span className="font-mono text-[10px] text-[#00ff88]">{formatEuros(totalMRR)}/mes</span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowAddCliente(true)}
+              className="btn-glow btn-shimmer flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] text-[#00ff88] bg-[#00ff88]/10 border border-[#00ff88]/20 hover:bg-[#00ff88]/15 transition-all"
+            >
+              <Plus size={11} /> <span className="hidden sm:inline">Añadir cliente</span>
+            </button>
+          </div>
+          {clientesActivos.length === 0 ? (
+            <div className="text-center py-4 text-slate-600 text-[12px]">
+              Añade clientes con mantenimiento recurrente mensual. Se sincronizan con los ingresos fijos de Logika en Finanzas.
+            </div>
           ) : (
-            <div className="flex flex-col gap-2 stagger">
-              {clientesMRR.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 py-1.5 border-b border-[rgba(26,34,53,0.5)] last:border-0">
+            <div className="flex flex-col gap-1 stagger">
+              {clientesActivos.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 py-2 px-1 rounded-md group tx-row">
                   <Zap size={12} className="text-[#00ff88] flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] text-slate-300 truncate">{p.nombre}</div>
-                    {p.lead?.empresa && <div className="text-[10px] text-slate-600 truncate">{p.lead.empresa}</div>}
-                  </div>
-                  <Badge variant="default" className="text-[9px] flex-shrink-0">
-                    {PROYECTO_TIPO_LABELS[p.tipo]}
-                  </Badge>
-                  <span className="font-mono text-[12px] text-[#00ff88] flex-shrink-0">
-                    {formatEuros(p.precio_mrr ?? 0)}
+                  <span className="flex-1 text-[12px] text-slate-300 truncate">{r.descripcion}</span>
+                  <button
+                    onClick={() => handleDeleteCliente(r.id)}
+                    className="p-0.5 rounded text-slate-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                  <span className="font-mono text-[12px] text-[#00ff88] font-medium flex-shrink-0">
+                    {formatEuros(r.importe)}/mes
                   </span>
                 </div>
               ))}
@@ -251,6 +278,7 @@ export default function CRMPage() {
 
       <LeadFormModal open={showCreate} onClose={() => setShowCreate(false)} onSaved={refetch} />
       <LeadFormModal open={!!editingLead} lead={editingLead ?? undefined} onClose={() => setEditingLead(null)} onSaved={refetch} />
+      <ClienteActivoFormModal open={showAddCliente} onClose={() => setShowAddCliente(false)} onSaved={refetchRec} />
     </div>
   )
 }
@@ -405,6 +433,60 @@ function LeadFormModal({ open, lead, onClose, onSaved }: {
         <Textarea label="Notas" value={form.notas} onChange={(e) => u('notas', e.target.value)} placeholder="Apuntes..." />
         <div className="flex gap-2 mt-1">
           <Button type="submit" variant="primary" loading={saving} className="flex-1">{isEdit ? 'Guardar' : 'Crear lead'}</Button>
+          <Button type="button" variant="ghost" onClick={onClose} className="flex-1">Cancelar</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ─── Cliente Activo Form (crea ingreso recurrente Logika) ──
+
+function ClienteActivoFormModal({ open, onClose, onSaved }: {
+  open: boolean; onClose: () => void; onSaved: () => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ descripcion: '', importe: '', categoria: 'ingreso_mrr' })
+  function u(f: string, v: string) { setForm((p) => ({ ...p, [f]: v })) }
+
+  const catOptions = Object.entries(CATEGORIA_LOGIKA_LABELS)
+    .filter(([k]) => k.startsWith('ingreso'))
+    .map(([v, l]) => ({ value: v, label: l }))
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.descripcion.trim() || !form.importe) return
+    setSaving(true)
+    try {
+      // Crear como ingreso recurrente de Logika (sincroniza con Finanzas)
+      await createTransaccionRecurrente({
+        contexto: 'logika', tipo: 'ingreso',
+        importe: Number(form.importe), descripcion: form.descripcion.trim(),
+        categoria_logika: form.categoria || 'ingreso_mrr',
+      })
+      // También registrar como transacción real de este mes
+      await createTransaccion({
+        contexto: 'logika', tipo: 'ingreso',
+        importe: Number(form.importe), descripcion: form.descripcion.trim(),
+        categoria_logika: form.categoria || 'ingreso_mrr',
+        fecha: format(new Date(), 'yyyy-MM-dd'),
+      })
+      await onSaved()
+      setForm({ descripcion: '', importe: '', categoria: 'ingreso_mrr' })
+      onClose()
+    } catch (e) { console.error(e) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Nuevo cliente recurrente">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <Input label="Cliente / servicio *" value={form.descripcion} onChange={(e) => u('descripcion', e.target.value)} placeholder="Ej: Mantenimiento web XYZ" required />
+        <Input label="Importe mensual (€) *" value={form.importe} onChange={(e) => u('importe', e.target.value)} placeholder="0" type="number" step="0.01" required />
+        <Select label="Tipo de ingreso" value={form.categoria} onChange={(e) => u('categoria', e.target.value)} options={catOptions} />
+        <p className="text-[10px] text-slate-600">Se registra como ingreso fijo de Logika Digital en Finanzas.</p>
+        <div className="flex gap-2 mt-1">
+          <Button type="submit" variant="primary" loading={saving} className="flex-1">Añadir cliente</Button>
           <Button type="button" variant="ghost" onClick={onClose} className="flex-1">Cancelar</Button>
         </div>
       </form>
