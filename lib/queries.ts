@@ -3,6 +3,7 @@ import type {
   Lead,
   Tarea,
   Transaccion,
+  TransaccionRecurrente,
   Proyecto,
   PresupuestoMensual,
   Evento,
@@ -11,7 +12,7 @@ import type {
   MetricasOverview,
   ResumenFinanciero,
 } from '@/types'
-import { startOfMonth, endOfMonth, format, isToday, isPast, parseISO } from 'date-fns'
+import { startOfMonth, endOfMonth, format } from 'date-fns'
 
 // ─── LEADS ───────────────────────────────────
 
@@ -35,6 +36,18 @@ export async function getLeadsActivos(): Promise<Lead[]> {
     .from('leads')
     .select('*')
     .in('estado', ['prospecto', 'visita_pendiente', 'contactado', 'caliente', 'propuesta_enviada'])
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as unknown as Lead[]
+}
+
+// Todos los leads incluyendo cerrados (para CRM completo)
+export async function getAllLeads(): Promise<Lead[]> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('leads')
+    .select('*')
     .order('updated_at', { ascending: false })
 
   if (error) throw error
@@ -239,6 +252,85 @@ export async function deleteTransaccion(id: string): Promise<void> {
   if (error) throw error
 }
 
+// ─── TRANSACCIONES RECURRENTES ───────────────
+
+export async function getTransaccionesRecurrentes(
+  contexto: 'personal' | 'logika'
+): Promise<TransaccionRecurrente[]> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('transacciones_recurrentes')
+    .select('*')
+    .eq('contexto', contexto)
+    .eq('activa', true)
+    .order('tipo', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as unknown as TransaccionRecurrente[]
+}
+
+export async function createTransaccionRecurrente(tx: {
+  contexto: 'personal' | 'logika'
+  tipo: 'ingreso' | 'gasto'
+  importe: number
+  descripcion: string
+  categoria_personal?: string | null
+  categoria_logika?: string | null
+}): Promise<TransaccionRecurrente> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('transacciones_recurrentes')
+    .insert({
+      contexto: tx.contexto,
+      tipo: tx.tipo,
+      importe: tx.importe,
+      descripcion: tx.descripcion,
+      categoria_personal: tx.categoria_personal || null,
+      categoria_logika: tx.categoria_logika || null,
+      activa: true,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as unknown as TransaccionRecurrente
+}
+
+export async function deleteTransaccionRecurrente(id: string): Promise<void> {
+  const sb = getSupabaseBrowser()
+  const { error } = await sb
+    .from('transacciones_recurrentes')
+    .update({ activa: false })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+// Registrar todas las recurrentes como transacciones del mes actual
+export async function registrarRecurrentesDelMes(
+  contexto: 'personal' | 'logika'
+): Promise<number> {
+  const recurrentes = await getTransaccionesRecurrentes(contexto)
+  const hoy = format(new Date(), 'yyyy-MM-dd')
+
+  let count = 0
+  for (const r of recurrentes) {
+    await createTransaccion({
+      contexto: r.contexto,
+      tipo: r.tipo,
+      importe: r.importe,
+      descripcion: r.descripcion,
+      categoria_personal: r.categoria_personal,
+      categoria_logika: r.categoria_logika,
+      fecha: hoy,
+    })
+    count++
+  }
+  return count
+}
+
+// ─── RESUMEN MENSUAL ─────────────────────────
+
 export async function getResumenMensual(
   contexto: 'personal' | 'logika',
   meses: number = 6
@@ -348,32 +440,13 @@ export async function getMetricasOverview(): Promise<MetricasOverview> {
 
   const hoy = format(new Date(), 'yyyy-MM-dd')
 
-  const tareasHoy = tareasPendientes.filter(
-    (t) => t.fecha_limite === hoy
-  ).length
-
-  const tareasVencidas = tareasPendientes.filter(
-    (t) => t.fecha_limite !== null && t.fecha_limite < hoy
-  ).length
-
-  const visitasPendientes = leadsActivos.filter(
-    (l) => l.estado === 'visita_pendiente'
-  ).length
-
-  const ingresosMes = transPersonal
-    .filter((t) => t.tipo === 'ingreso')
-    .reduce((acc, t) => acc + Number(t.importe), 0)
-
-  const gastosMes = transPersonal
-    .filter((t) => t.tipo === 'gasto')
-    .reduce((acc, t) => acc + Number(t.importe), 0)
-
   return {
     leads_activos: leadsActivos.length,
-    visitas_pendientes: visitasPendientes,
+    visitas_pendientes: leadsActivos.filter((l) => l.estado === 'visita_pendiente' || l.estado === 'prospecto').length,
     mrr_logika: mrr,
-    tareas_hoy: tareasHoy,
-    tareas_vencidas: tareasVencidas,
-    balance_personal_mes: ingresosMes - gastosMes,
+    tareas_hoy: tareasPendientes.filter((t) => t.fecha_limite === hoy).length,
+    tareas_vencidas: tareasPendientes.filter((t) => t.fecha_limite !== null && t.fecha_limite < hoy).length,
+    balance_personal_mes: transPersonal.filter((t) => t.tipo === 'ingreso').reduce((a, t) => a + Number(t.importe), 0)
+      - transPersonal.filter((t) => t.tipo === 'gasto').reduce((a, t) => a + Number(t.importe), 0),
   }
 }

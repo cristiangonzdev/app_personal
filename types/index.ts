@@ -1,8 +1,5 @@
 // ─────────────────────────────────────────────
 // LOGIKA OS — Types
-// Estos tipos reflejan exactamente el schema
-// de Supabase. Si cambias una tabla, cambia
-// aquí también.
 // ─────────────────────────────────────────────
 
 export type LeadEstado =
@@ -79,7 +76,6 @@ export interface Proyecto {
   notas: string | null
   created_at: string
   updated_at: string
-  // join
   lead?: Pick<Lead, 'nombre' | 'empresa'>
 }
 
@@ -96,7 +92,6 @@ export interface Tarea {
   completada_at: string | null
   created_at: string
   updated_at: string
-  // join
   lead?: Pick<Lead, 'nombre' | 'empresa'>
 }
 
@@ -111,6 +106,18 @@ export interface Transaccion {
   lead_id: string | null
   proyecto_id: string | null
   fecha: string
+  created_at: string
+}
+
+export interface TransaccionRecurrente {
+  id: string
+  contexto: TransaccionContexto
+  tipo: TransaccionTipo
+  importe: number
+  descripcion: string
+  categoria_personal: CategoriaPersonal | null
+  categoria_logika: CategoriaLogika | null
+  activa: boolean
   created_at: string
 }
 
@@ -135,22 +142,19 @@ export interface Evento {
 
 // ─── Tipos de UI / derivados ─────────────────
 
-// Para el kanban — leads agrupados por estado
 export type KanbanColumn = {
   estado: LeadEstado
   label: string
   leads: Lead[]
 }
 
-// Para el resumen financiero mensual
 export type ResumenFinanciero = {
-  mes: string         // "2026-03"
+  mes: string
   ingresos: number
   gastos: number
   balance: number
 }
 
-// Para las métricas del overview
 export type MetricasOverview = {
   leads_activos: number
   visitas_pendientes: number
@@ -160,7 +164,39 @@ export type MetricasOverview = {
   balance_personal_mes: number
 }
 
-// Labels legibles para la UI
+// ─── CRM Pipeline simplificado (4 columnas) ──
+// Agrupa los estados de BD en columnas visuales
+
+export type PipelineColumn = {
+  key: string
+  label: string
+  color: string
+  dot: string
+  dbStates: LeadEstado[]
+}
+
+export const CRM_PIPELINE: PipelineColumn[] = [
+  { key: 'visita', label: 'Visita pendiente', color: '#f59e0b', dot: 'bg-amber-400', dbStates: ['prospecto', 'visita_pendiente'] },
+  { key: 'contactado', label: 'Contactado', color: '#3b82f6', dot: 'bg-blue-400', dbStates: ['contactado'] },
+  { key: 'caliente', label: 'Caliente', color: '#f97316', dot: 'bg-orange-400', dbStates: ['caliente', 'propuesta_enviada'] },
+  { key: 'cerrado', label: 'Cerrado', color: '#00ff88', dot: 'bg-green-400', dbStates: ['cerrado_ganado', 'cerrado_perdido'] },
+]
+
+// Mapeo: cuando avanzas desde una columna, a qué estado DB va
+export const ADVANCE_STATE: Record<string, LeadEstado> = {
+  visita: 'contactado',
+  contactado: 'caliente',
+  caliente: 'cerrado_ganado',
+}
+
+export const RETREAT_STATE: Record<string, LeadEstado> = {
+  contactado: 'visita_pendiente',
+  caliente: 'contactado',
+  cerrado: 'caliente',
+}
+
+// ─── Labels ──────────────────────────────────
+
 export const LEAD_ESTADO_LABELS: Record<LeadEstado, string> = {
   prospecto: 'Prospecto',
   visita_pendiente: 'Visita pendiente',

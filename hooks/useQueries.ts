@@ -1,21 +1,10 @@
-// ─────────────────────────────────────────────
-// LOGIKA OS — Custom Hooks
-//
-// Cada hook encapsula:
-// - El estado de carga (loading)
-// - El estado de error (error)
-// - Los datos (data)
-// - Una función para refrescar (refetch)
-//
-// Uso en cualquier componente:
-//   const { data: leads, loading, refetch } = useLeads()
-// ─────────────────────────────────────────────
-
 import { useState, useEffect, useCallback } from 'react'
 import {
   getLeadsActivos,
+  getAllLeads,
   getTareasPendientes,
   getTransacciones,
+  getTransaccionesRecurrentes,
   getResumenMensual,
   getProyectosActivos,
   getMetricasOverview,
@@ -26,16 +15,12 @@ import type {
   Lead,
   Tarea,
   Transaccion,
+  TransaccionRecurrente,
   Proyecto,
   Evento,
   MetricasOverview,
   ResumenFinanciero,
 } from '@/types'
-
-// ─── Factory genérico ────────────────────────
-// Evita repetir el mismo patrón loading/error/data
-// en cada hook. Recibe una función async y devuelve
-// el hook completo.
 
 function useQuery<T>(queryFn: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null)
@@ -62,10 +47,14 @@ function useQuery<T>(queryFn: () => Promise<T>) {
   return { data, loading, error, refetch: fetch }
 }
 
-// ─── Hooks específicos ───────────────────────
-
+// Solo leads activos en pipeline (sin cerrados)
 export function useLeads() {
   return useQuery<Lead[]>(getLeadsActivos)
+}
+
+// Todos los leads incluyendo cerrados (para CRM)
+export function useAllLeads() {
+  return useQuery<Lead[]>(getAllLeads)
 }
 
 export function useTareas() {
@@ -78,6 +67,14 @@ export function useTransacciones(contexto: 'personal' | 'logika', mes?: Date) {
     [contexto, mes?.getMonth()]
   )
   return useQuery<Transaccion[]>(fn)
+}
+
+export function useTransaccionesRecurrentes(contexto: 'personal' | 'logika') {
+  const fn = useCallback(
+    () => getTransaccionesRecurrentes(contexto),
+    [contexto]
+  )
+  return useQuery<TransaccionRecurrente[]>(fn)
 }
 
 export function useResumenMensual(contexto: 'personal' | 'logika') {
