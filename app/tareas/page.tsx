@@ -1,19 +1,10 @@
 'use client'
 
-// ─────────────────────────────────────────────
-// LOGIKA OS — Tareas Page
-//
-// Lista de tareas con:
-// - Filtros por estado y urgencia
-// - Marcar como completada
-// - Indicadores visuales de vencimiento
-// ─────────────────────────────────────────────
-
 import { useState } from 'react'
 import { useTareas } from '@/hooks/useQueries'
 import { completarTarea } from '@/lib/queries'
 import {
-  Card, CardTitle, PageHeader, LoadingSpinner, EmptyState, ErrorState, Badge
+  Card, CardTitle, PageHeader, LoadingSpinner, EmptyState, ErrorState
 } from '@/components/ui'
 import { formatFechaCorta, isTareaVencida, cn } from '@/lib/utils'
 import type { Tarea } from '@/types'
@@ -30,7 +21,6 @@ export default function TareasPage() {
 
   const hoy = format(new Date(), 'yyyy-MM-dd')
 
-  // Aplicar filtro
   const tareasFiltradas = (tareas ?? []).filter((t) => {
     if (filtro === 'hoy') return t.fecha_limite === hoy
     if (filtro === 'vencidas') return isTareaVencida(t.fecha_limite)
@@ -38,7 +28,6 @@ export default function TareasPage() {
     return true
   })
 
-  // Contadores para los badges del filtro
   const contadores = {
     todas: (tareas ?? []).length,
     hoy: (tareas ?? []).filter((t) => t.fecha_limite === hoy).length,
@@ -67,8 +56,8 @@ export default function TareasPage() {
         subtitle={`${(tareas ?? []).length} pendientes`}
       />
 
-      {/* Filtros */}
-      <div className="flex gap-2 mb-5 flex-wrap">
+      {/* Filters - horizontal scroll on mobile */}
+      <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
         {(Object.entries(contadores) as [Filtro, number][]).map(([key, count]) => {
           const labels: Record<Filtro, string> = {
             todas: 'Todas',
@@ -81,19 +70,19 @@ export default function TareasPage() {
               key={key}
               onClick={() => setFiltro(key)}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] border transition-all',
+                'btn-glow flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] border transition-all snap-start',
                 filtro === key
                   ? key === 'vencidas'
-                    ? 'bg-red-400/10 border-red-400/20 text-red-400'
-                    : 'bg-[#00d9ff]/10 border-[#00d9ff]/20 text-[#00d9ff]'
-                  : 'bg-[#111827] border-[#1e2d45] text-slate-500 hover:text-slate-300'
+                    ? 'bg-red-400/10 border-red-400/20 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]'
+                    : 'bg-[#00d9ff]/10 border-[#00d9ff]/20 text-[#00d9ff] shadow-[0_0_15px_rgba(0,217,255,0.1)]'
+                  : 'glass-card text-slate-500 hover:text-slate-300'
               )}
             >
               {labels[key]}
               {count > 0 && (
                 <span className={cn(
-                  'font-mono text-[10px] px-1 rounded',
-                  filtro === key ? 'bg-current/20' : 'bg-[#1a2235]'
+                  'font-mono text-[10px] px-1.5 py-0.5 rounded-md',
+                  filtro === key ? 'bg-current/10' : 'bg-[rgba(26,34,53,0.6)]'
                 )}>
                   {count}
                 </span>
@@ -126,7 +115,7 @@ export default function TareasPage() {
   )
 }
 
-// ─── Fila de tarea ────────────────────────────
+// ─── Task Row ────────────────────────────────
 
 interface TareaRowProps {
   tarea: Tarea
@@ -143,10 +132,10 @@ function TareaRow({ tarea, isLast, isCompleting, onCompletar }: TareaRowProps) {
   return (
     <div
       className={cn(
-        'flex items-start gap-3 py-3',
-        !isLast && 'border-b border-[#1a2235]',
-        vencida && 'pl-2 border-l-2 border-red-500',
-        esHoy && !vencida && 'pl-2 border-l-2 border-amber-400'
+        'task-row flex items-start gap-3 py-3 px-1 rounded-md',
+        !isLast && 'border-b border-[rgba(26,34,53,0.5)]',
+        vencida && 'pl-2 border-l-2 border-l-red-500',
+        esHoy && !vencida && 'pl-2 border-l-2 border-l-amber-400'
       )}
     >
       {/* Check button */}
@@ -154,25 +143,25 @@ function TareaRow({ tarea, isLast, isCompleting, onCompletar }: TareaRowProps) {
         onClick={onCompletar}
         disabled={isCompleting}
         className={cn(
-          'flex-shrink-0 mt-0.5 text-slate-600 hover:text-[#00ff88] transition-colors',
+          'flex-shrink-0 mt-0.5 text-slate-600 hover:text-[#00ff88] transition-all active:scale-90',
           isCompleting && 'opacity-50'
         )}
       >
         {isCompleting ? (
-          <CheckCircle2 size={16} className="text-[#00ff88] animate-pulse" />
+          <CheckCircle2 size={18} className="text-[#00ff88] animate-pulse" />
         ) : (
-          <Circle size={16} />
+          <Circle size={18} />
         )}
       </button>
 
-      {/* Contenido */}
+      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="text-[13px] text-slate-300 mb-0.5">{tarea.titulo}</div>
         <div className="flex items-center gap-2 flex-wrap">
           {tarea.lead?.nombre && (
             <div className="flex items-center gap-1 text-[11px] text-slate-600">
               <Link2 size={10} />
-              {tarea.lead.nombre}
+              <span className="truncate max-w-[120px]">{tarea.lead.nombre}</span>
             </div>
           )}
           {tarea.recordatorio_mismo_dia && (
@@ -184,7 +173,7 @@ function TareaRow({ tarea, isLast, isCompleting, onCompletar }: TareaRowProps) {
         </div>
       </div>
 
-      {/* Fecha */}
+      {/* Date */}
       <div className={cn(
         'flex items-center gap-1 flex-shrink-0 text-[11px] font-mono',
         vencida ? 'text-red-400' : esHoy ? 'text-amber-400' : 'text-slate-600'

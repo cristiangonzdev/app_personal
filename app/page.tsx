@@ -1,18 +1,8 @@
 'use client'
 
-// ─────────────────────────────────────────────
-// LOGIKA OS — Overview Page
-//
-// Página principal. Muestra:
-// - 4 métricas clave
-// - Pipeline kanban resumido
-// - Tareas del día
-// - Balance financiero del mes
-// ─────────────────────────────────────────────
-
 import { useMetricasOverview, useLeads, useTareas, useTransacciones } from '@/hooks/useQueries'
 import {
-  Card, CardTitle, MetricCard, Badge, PageHeader, LoadingSpinner, EmptyState, ErrorState
+  Card, CardTitle, MetricCard, PageHeader, LoadingSpinner, EmptyState, ErrorState
 } from '@/components/ui'
 import { formatEuros, formatFechaCorta, isTareaVencida, LEAD_ESTADO_LABELS, LEAD_ESTADO_DOT, CATEGORIA_PERSONAL_LABELS } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -20,7 +10,6 @@ import type { Lead, LeadEstado, CategoriaPersonal } from '@/types'
 import Link from 'next/link'
 import { ArrowRight, AlertCircle } from 'lucide-react'
 
-// Estados del pipeline que mostramos en el overview (sin cerrados)
 const PIPELINE_ESTADOS: LeadEstado[] = [
   'prospecto', 'visita_pendiente', 'caliente', 'propuesta_enviada'
 ]
@@ -31,13 +20,11 @@ export default function OverviewPage() {
   const { data: tareas, loading: loadingTareas } = useTareas()
   const { data: transacciones, loading: loadingTrans } = useTransacciones('personal')
 
-  // Agrupar leads por estado para el mini-kanban
   const kanban = PIPELINE_ESTADOS.map((estado) => ({
     estado,
     leads: (leads ?? []).filter((l) => l.estado === estado),
   }))
 
-  // Calcular gastos por categoría para el mes actual
   const gastosPorCategoria = (transacciones ?? [])
     .filter((t) => t.tipo === 'gasto')
     .reduce((acc, t) => {
@@ -61,11 +48,11 @@ export default function OverviewPage() {
         subtitle="Resumen de Logika Digital y vida personal"
       />
 
-      {/* ── Métricas ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      {/* ── Metrics ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {loadingMetricas ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-[#111827] border border-[#1e2d45] rounded-xl p-5 h-24 animate-pulse" />
+            <div key={i} className="glass-card rounded-xl p-5 h-24 animate-pulse" />
           ))
         ) : (
           <>
@@ -102,14 +89,20 @@ export default function OverviewPage() {
 
       {/* ── Pipeline kanban ── */}
       <Card className="mb-4">
-        <CardTitle action={<Link href="/crm" className="flex items-center gap-1 hover:text-white transition-colors">Ver todo <ArrowRight size={11} /></Link>}>
+        <CardTitle action={
+          <Link href="/crm" className="btn-shimmer flex items-center gap-1 hover:text-white transition-colors px-2 py-0.5 rounded">
+            Ver todo <ArrowRight size={11} />
+          </Link>
+        }>
           Pipeline CRM
         </CardTitle>
-        <div className="grid grid-cols-4 gap-2">
+
+        {/* Mobile: horizontal scroll. Desktop: grid */}
+        <div className="flex md:grid md:grid-cols-4 gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory md:snap-none">
           {PIPELINE_ESTADOS.map((estado) => {
             const col = kanban.find((k) => k.estado === estado)!
             return (
-              <div key={estado} className="bg-[#1a2235] rounded-lg p-3">
+              <div key={estado} className="kanban-col bg-[rgba(26,34,53,0.4)] rounded-lg p-3 min-w-[160px] md:min-w-0 snap-start">
                 <div className="flex items-center gap-1.5 mb-2.5">
                   <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', LEAD_ESTADO_DOT[estado])} />
                   <span className="text-[10px] uppercase tracking-wider text-slate-500 truncate">
@@ -121,7 +114,7 @@ export default function OverviewPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {loadingLeads ? (
-                    <div className="h-10 bg-[#111827] rounded animate-pulse" />
+                    <div className="h-10 bg-[rgba(17,24,39,0.5)] rounded animate-pulse" />
                   ) : col.leads.length === 0 ? (
                     <div className="text-[10px] text-slate-700 py-2 text-center">—</div>
                   ) : (
@@ -136,12 +129,16 @@ export default function OverviewPage() {
         </div>
       </Card>
 
-      {/* ── Tareas + Finanzas ── */}
+      {/* ── Tasks + Finance ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Tareas */}
         <Card>
-          <CardTitle action={<Link href="/tareas" className="flex items-center gap-1 hover:text-white transition-colors">Ver todo <ArrowRight size={11} /></Link>}>
+          <CardTitle action={
+            <Link href="/tareas" className="btn-shimmer flex items-center gap-1 hover:text-white transition-colors px-2 py-0.5 rounded">
+              Ver todo <ArrowRight size={11} />
+            </Link>
+          }>
             Tareas pendientes
           </CardTitle>
           {loadingTareas ? (
@@ -157,7 +154,7 @@ export default function OverviewPage() {
                   <div
                     key={tarea.id}
                     className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#1a2235] text-[12px]',
+                      'task-row flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[rgba(26,34,53,0.4)] text-[12px]',
                       vencida && 'border-l-2 border-red-500',
                       esHoy && !vencida && 'border-l-2 border-amber-400'
                     )}
@@ -165,7 +162,7 @@ export default function OverviewPage() {
                     <div className="w-3.5 h-3.5 rounded border border-[#2a3f5f] flex-shrink-0" />
                     <span className="flex-1 text-slate-300 truncate">{tarea.titulo}</span>
                     {tarea.lead?.nombre && (
-                      <span className="text-[10px] text-slate-600 truncate max-w-[80px]">
+                      <span className="text-[10px] text-slate-600 truncate max-w-[80px] hidden sm:inline">
                         {tarea.lead.nombre}
                       </span>
                     )}
@@ -183,27 +180,31 @@ export default function OverviewPage() {
           )}
         </Card>
 
-        {/* Finanzas personales del mes */}
+        {/* Finanzas personales */}
         <Card>
-          <CardTitle action={<Link href="/finanzas" className="flex items-center gap-1 hover:text-white transition-colors">Ver todo <ArrowRight size={11} /></Link>}>
+          <CardTitle action={
+            <Link href="/finanzas" className="btn-shimmer flex items-center gap-1 hover:text-white transition-colors px-2 py-0.5 rounded">
+              Ver todo <ArrowRight size={11} />
+            </Link>
+          }>
             Finanzas personales — {new Date().toLocaleDateString('es-ES', { month: 'long' })}
           </CardTitle>
           <div className="flex gap-4 mb-4">
             <div>
               <div className="text-[10px] text-slate-600 mb-0.5">Ingresos</div>
-              <div className="font-mono text-[16px] font-bold text-[#00ff88]">
+              <div className="font-mono text-[14px] md:text-[16px] font-bold text-[#00ff88] animate-count">
                 {formatEuros(ingresosMes)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-slate-600 mb-0.5">Gastos</div>
-              <div className="font-mono text-[16px] font-bold text-red-400">
+              <div className="font-mono text-[14px] md:text-[16px] font-bold text-red-400 animate-count">
                 {formatEuros(totalGastos)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-slate-600 mb-0.5">Balance</div>
-              <div className={cn('font-mono text-[16px] font-bold', ingresosMes - totalGastos >= 0 ? 'text-[#00d9ff]' : 'text-red-400')}>
+              <div className={cn('font-mono text-[14px] md:text-[16px] font-bold animate-count', ingresosMes - totalGastos >= 0 ? 'text-[#00d9ff]' : 'text-red-400')}>
                 {formatEuros(ingresosMes - totalGastos)}
               </div>
             </div>
@@ -217,12 +218,12 @@ export default function OverviewPage() {
                   const pct = totalGastos > 0 ? Math.round((importe / totalGastos) * 100) : 0
                   return (
                     <div key={cat} className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500 w-28 truncate flex-shrink-0">
+                      <span className="text-[11px] text-slate-500 w-24 md:w-28 truncate flex-shrink-0">
                         {CATEGORIA_PERSONAL_LABELS[cat as CategoriaPersonal] ?? cat}
                       </span>
-                      <div className="flex-1 h-1 bg-[#1a2235] rounded-full overflow-hidden">
+                      <div className="flex-1 h-1 bg-[rgba(26,34,53,0.6)] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-[#00d9ff] rounded-full transition-all duration-500"
+                          className="h-full bg-[#00d9ff] rounded-full animate-progress"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -244,7 +245,7 @@ export default function OverviewPage() {
 // ─── Mini card del kanban ─────────────────────
 function KanbanCard({ lead }: { lead: Lead }) {
   return (
-    <div className="bg-[#111827] border border-[#1e2d45] rounded px-2.5 py-2">
+    <div className="lead-card bg-[rgba(17,24,39,0.5)] border border-[rgba(30,45,69,0.5)] rounded px-2.5 py-2">
       <div className="text-[12px] font-medium text-slate-300 truncate">{lead.nombre}</div>
       {lead.empresa && (
         <div className="text-[10px] text-slate-600 truncate">{lead.empresa}</div>

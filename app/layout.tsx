@@ -1,14 +1,4 @@
-// ─────────────────────────────────────────────
-// LOGIKA OS — Root Layout
-//
-// El layout envuelve TODAS las páginas.
-// Incluye:
-// - Fuentes (Syne + DM Mono)
-// - Sidebar de navegación
-// - Área de contenido principal
-// ─────────────────────────────────────────────
-
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Syne, DM_Mono } from 'next/font/google'
 import './globals.css'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -28,6 +18,15 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: 'Logika OS',
   description: 'Sistema operativo personal de Logika Digital',
+  manifest: undefined,
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#060a14',
 }
 
 export default function RootLayout({
@@ -37,11 +36,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${syne.variable} ${dmMono.variable}`}>
-      <body className="bg-[#0a0e1a] text-slate-200 antialiased">
-        <div className="flex h-screen overflow-hidden">
+      <body className="bg-[#060a14] text-slate-200 antialiased">
+        {/* Animated background */}
+        <div className="bg-mesh" aria-hidden="true">
+          <div className="bg-orb bg-orb-1" />
+          <div className="bg-orb bg-orb-2" />
+        </div>
+        <div className="bg-grid" aria-hidden="true" />
+
+        {/* App shell */}
+        <div className="relative z-10 flex h-screen overflow-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto bg-[#0a0e1a]">
-            <div className="min-h-full p-6 md:p-8">
+          <main className="flex-1 overflow-y-auto scroll-smooth">
+            {/* Mobile: top padding for bar + bottom for nav */}
+            <div className="min-h-full px-4 pt-[72px] pb-[90px] md:px-8 md:pt-8 md:pb-8">
               {children}
             </div>
           </main>

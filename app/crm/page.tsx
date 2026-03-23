@@ -1,12 +1,5 @@
 'use client'
 
-// ─────────────────────────────────────────────
-// LOGIKA OS — CRM Page
-//
-// Kanban completo con todos los estados del pipeline.
-// Permite mover leads entre columnas con un click.
-// ─────────────────────────────────────────────
-
 import { useState } from 'react'
 import { useLeads } from '@/hooks/useQueries'
 import { updateLeadEstado } from '@/lib/queries'
@@ -15,9 +8,8 @@ import {
 } from '@/components/ui'
 import { formatEuros, LEAD_ESTADO_LABELS, LEAD_ESTADO_DOT, cn } from '@/lib/utils'
 import type { Lead, LeadEstado } from '@/types'
-import { Phone, Mail, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Phone, Mail, ChevronRight, ChevronLeft, X } from 'lucide-react'
 
-// Pipeline completo — de izquierda a derecha
 const PIPELINE: LeadEstado[] = [
   'prospecto',
   'visita_pendiente',
@@ -26,7 +18,6 @@ const PIPELINE: LeadEstado[] = [
   'propuesta_enviada',
 ]
 
-// Colores del borde superior de cada columna
 const COL_ACCENTS: Record<LeadEstado, string> = {
   prospecto: '#64748b',
   visita_pendiente: '#f59e0b',
@@ -42,13 +33,11 @@ export default function CRMPage() {
   const [movingId, setMovingId] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
 
-  // Agrupar leads por estado
   const kanban = PIPELINE.map((estado) => ({
     estado,
     leads: (leads ?? []).filter((l) => l.estado === estado),
   }))
 
-  // Mover lead al estado anterior o siguiente
   async function moverLead(lead: Lead, direccion: 'adelante' | 'atras') {
     const idx = PIPELINE.indexOf(lead.estado)
     const nuevoIdx = direccion === 'adelante' ? idx + 1 : idx - 1
@@ -77,18 +66,16 @@ export default function CRMPage() {
       {loading ? (
         <LoadingSpinner text="Cargando pipeline..." />
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 snap-x snap-mandatory">
           {kanban.map(({ estado, leads: colLeads }) => (
-            <div key={estado} className="flex-shrink-0 w-[200px]">
-              {/* Header de columna */}
+            <div key={estado} className="flex-shrink-0 w-[170px] md:w-[200px] snap-start">
+              {/* Column header */}
               <div
                 className="rounded-t-lg px-3 py-2 flex items-center justify-between mb-0.5"
                 style={{ borderTop: `2px solid ${COL_ACCENTS[estado]}` }}
               >
                 <div className="flex items-center gap-1.5">
-                  <div
-                    className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', LEAD_ESTADO_DOT[estado])}
-                  />
+                  <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', LEAD_ESTADO_DOT[estado])} />
                   <span className="text-[11px] text-slate-400 font-medium">
                     {LEAD_ESTADO_LABELS[estado]}
                   </span>
@@ -101,7 +88,7 @@ export default function CRMPage() {
               {/* Cards */}
               <div className="flex flex-col gap-2">
                 {colLeads.length === 0 ? (
-                  <div className="text-[11px] text-slate-700 text-center py-4 bg-[#111827] border border-[#1e2d45] rounded-lg">
+                  <div className="text-[11px] text-slate-700 text-center py-4 glass-card rounded-lg">
                     Vacío
                   </div>
                 ) : (
@@ -123,14 +110,13 @@ export default function CRMPage() {
         </div>
       )}
 
-      {/* Panel lateral de detalle */}
+      {/* Detail panel */}
       {selectedLead && (
         <LeadDetail
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
           onMover={async (dir) => {
             await moverLead(selectedLead, dir)
-            // Actualizar el lead seleccionado
             const idx = PIPELINE.indexOf(selectedLead.estado)
             const nuevoIdx = dir === 'adelante' ? idx + 1 : idx - 1
             if (nuevoIdx >= 0 && nuevoIdx < PIPELINE.length) {
@@ -158,8 +144,7 @@ function LeadCard({ lead, isMoving, onSelect, onMover, pipelineIndex, pipelineLe
   return (
     <div
       className={cn(
-        'bg-[#111827] border border-[#1e2d45] rounded-lg p-3 cursor-pointer',
-        'hover:border-[#2a3f5f] transition-all duration-150',
+        'lead-card glass-card rounded-lg p-3 cursor-pointer',
         isMoving && 'opacity-50'
       )}
       onClick={onSelect}
@@ -179,19 +164,18 @@ function LeadCard({ lead, isMoving, onSelect, onMover, pipelineIndex, pipelineLe
         </div>
       )}
 
-      {/* Controles de mover */}
-      <div className="flex gap-1 mt-2 pt-2 border-t border-[#1e2d45]" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-1 mt-2 pt-2 border-t border-[rgba(30,45,69,0.5)]" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => onMover(lead, 'atras')}
           disabled={pipelineIndex === 0 || isMoving}
-          className="flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] text-slate-600 hover:text-slate-400 hover:bg-[#1a2235] disabled:opacity-20 transition-all"
+          className="btn-glow flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[10px] text-slate-600 hover:text-slate-400 disabled:opacity-20 transition-all"
         >
           <ChevronLeft size={10} /> Atrás
         </button>
         <button
           onClick={() => onMover(lead, 'adelante')}
           disabled={pipelineIndex === pipelineLength - 1 || isMoving}
-          className="flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] text-slate-600 hover:text-[#00d9ff] hover:bg-[#00d9ff]/5 disabled:opacity-20 transition-all"
+          className="btn-glow flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[10px] text-slate-600 hover:text-[#00d9ff] disabled:opacity-20 transition-all"
         >
           Avanzar <ChevronRight size={10} />
         </button>
@@ -212,16 +196,16 @@ function LeadDetail({
   onMover: (dir: 'adelante' | 'atras') => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end overlay-backdrop" onClick={onClose}>
       <div
-        className="w-[340px] h-full bg-[#111827] border-l border-[#1e2d45] p-6 overflow-y-auto"
+        className="panel-slide w-full max-w-[360px] h-full bg-[rgba(17,24,39,0.95)] backdrop-blur-2xl border-l border-[rgba(30,45,69,0.5)] p-5 md:p-6 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="text-[11px] text-slate-500 hover:text-slate-300 mb-5"
+          className="btn-glow flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 mb-5 px-2 py-1 rounded-md"
         >
-          ← Cerrar
+          <X size={12} /> Cerrar
         </button>
 
         <h2 className="text-[18px] font-bold text-slate-100 mb-0.5">{lead.nombre}</h2>
@@ -230,7 +214,7 @@ function LeadDetail({
         )}
 
         <div
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded mb-5"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg mb-5"
           style={{ background: `${COL_ACCENTS[lead.estado]}15`, border: `1px solid ${COL_ACCENTS[lead.estado]}30` }}
         >
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: COL_ACCENTS[lead.estado] }} />
@@ -239,12 +223,11 @@ function LeadDetail({
           </span>
         </div>
 
-        {/* Detalles */}
         <div className="flex flex-col gap-3 mb-6">
           {lead.telefono && (
             <div className="flex items-center gap-2 text-[13px]">
               <Phone size={13} className="text-slate-600" />
-              <a href={`tel:${lead.telefono}`} className="text-slate-400 hover:text-[#00d9ff]">
+              <a href={`tel:${lead.telefono}`} className="text-slate-400 hover:text-[#00d9ff] transition-colors">
                 {lead.telefono}
               </a>
             </div>
@@ -252,7 +235,7 @@ function LeadDetail({
           {lead.email && (
             <div className="flex items-center gap-2 text-[13px]">
               <Mail size={13} className="text-slate-600" />
-              <a href={`mailto:${lead.email}`} className="text-slate-400 hover:text-[#00d9ff]">
+              <a href={`mailto:${lead.email}`} className="text-slate-400 hover:text-[#00d9ff] transition-colors">
                 {lead.email}
               </a>
             </div>
@@ -278,25 +261,24 @@ function LeadDetail({
         </div>
 
         {lead.notas && (
-          <div className="bg-[#1a2235] rounded-lg p-3 mb-6">
+          <div className="glass-card rounded-lg p-3 mb-6">
             <div className="text-[10px] text-slate-600 uppercase tracking-wider mb-1.5">Notas</div>
             <p className="text-[12px] text-slate-400 leading-relaxed">{lead.notas}</p>
           </div>
         )}
 
-        {/* Mover */}
         <div className="flex gap-2">
           <button
             onClick={() => onMover('atras')}
             disabled={PIPELINE.indexOf(lead.estado) === 0}
-            className="flex-1 py-2 border border-[#1e2d45] rounded-lg text-[12px] text-slate-500 hover:text-slate-300 hover:border-[#2a3f5f] disabled:opacity-20 transition-all"
+            className="btn-glow btn-shimmer flex-1 py-2.5 border border-[rgba(30,45,69,0.5)] rounded-lg text-[12px] text-slate-500 hover:text-slate-300 disabled:opacity-20 transition-all"
           >
             ← Atrás
           </button>
           <button
             onClick={() => onMover('adelante')}
             disabled={PIPELINE.indexOf(lead.estado) === PIPELINE.length - 1}
-            className="flex-1 py-2 bg-[#00d9ff]/10 border border-[#00d9ff]/20 rounded-lg text-[12px] text-[#00d9ff] hover:bg-[#00d9ff]/15 disabled:opacity-20 transition-all"
+            className="btn-glow btn-shimmer flex-1 py-2.5 bg-[#00d9ff]/10 border border-[#00d9ff]/20 rounded-lg text-[12px] text-[#00d9ff] hover:bg-[#00d9ff]/15 disabled:opacity-20 transition-all"
           >
             Avanzar →
           </button>

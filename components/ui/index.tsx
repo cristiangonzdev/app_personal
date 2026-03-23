@@ -1,12 +1,5 @@
 'use client'
 
-// ─────────────────────────────────────────────
-// LOGIKA OS — UI Components
-//
-// Componentes base reutilizables en todo el app.
-// Todos aceptan className para override puntual.
-// ─────────────────────────────────────────────
-
 import { cn } from '@/lib/utils'
 import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -16,20 +9,20 @@ import type { ReactNode } from 'react'
 interface CardProps {
   children: ReactNode
   className?: string
-  accent?: string // color del borde superior
+  accent?: string
 }
 
 export function Card({ children, className, accent }: CardProps) {
   return (
     <div
       className={cn(
-        'bg-[#111827] border border-[#1e2d45] rounded-xl p-5 relative overflow-hidden',
+        'glass-card rounded-xl p-4 md:p-5 relative overflow-hidden',
         className
       )}
     >
       {accent && (
         <div
-          className="absolute top-0 left-0 right-0 h-[2px]"
+          className="accent-line absolute top-0 left-0 right-0 h-[2px]"
           style={{ background: accent }}
         />
       )}
@@ -75,11 +68,11 @@ export function MetricCard({ label, value, sub, subColor = 'muted', accent }: Me
   }
 
   return (
-    <Card accent={accent}>
+    <Card accent={accent} className="group">
       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
         {label}
       </div>
-      <div className="text-[26px] font-bold font-mono tracking-tight text-slate-100">
+      <div className="text-[22px] md:text-[26px] font-bold font-mono tracking-tight text-slate-100 animate-count">
         {value}
       </div>
       {sub && (
@@ -139,18 +132,18 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   }).toUpperCase()
 
   return (
-    <div className="flex items-start justify-between mb-7 animate-in">
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 md:mb-7 animate-in gap-2">
       <div>
-        <h1 className="text-[22px] font-bold tracking-tight text-slate-100">
+        <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-100">
           {title}
         </h1>
         {subtitle && (
-          <p className="text-[13px] text-slate-500 mt-0.5">{subtitle}</p>
+          <p className="text-[12px] md:text-[13px] text-slate-500 mt-0.5">{subtitle}</p>
         )}
       </div>
       <div className="flex items-center gap-3">
         {action}
-        <span className="font-mono text-[10px] text-slate-600 bg-[#111827] border border-[#1e2d45] px-2.5 py-1 rounded">
+        <span className="font-mono text-[10px] text-slate-600 glass-card px-2.5 py-1 rounded-lg">
           {hoy}
         </span>
       </div>
@@ -162,8 +155,8 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
 
 export function LoadingSpinner({ text = 'Cargando...' }: { text?: string }) {
   return (
-    <div className="flex items-center gap-2 text-slate-500 text-[13px]">
-      <Loader2 size={14} className="animate-spin" />
+    <div className="flex items-center gap-2 text-slate-500 text-[13px] py-4">
+      <Loader2 size={14} className="animate-spin text-[#00d9ff]" />
       {text}
     </div>
   )
@@ -183,7 +176,7 @@ export function EmptyState({ message }: { message: string }) {
 
 export function ErrorState({ message }: { message: string }) {
   return (
-    <div className="text-[13px] text-red-400 bg-red-400/5 border border-red-400/20 rounded-lg px-4 py-3">
+    <div className="text-[13px] text-red-400 bg-red-400/5 border border-red-400/20 rounded-xl px-4 py-3 backdrop-blur-sm">
       Error: {message}
     </div>
   )
