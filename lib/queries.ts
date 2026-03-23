@@ -1,14 +1,3 @@
-// ─────────────────────────────────────────────
-// LOGIKA OS — Queries
-//
-// Todas las consultas a Supabase centralizadas aquí.
-// Ventajas:
-// - Un solo lugar para cambiar queries
-// - Tipado completo con los tipos de /types
-// - Manejo de errores consistente
-// - Fácil de testear
-// ─────────────────────────────────────────────
-
 import { getSupabaseBrowser } from './supabase'
 import type {
   Lead,
@@ -18,6 +7,7 @@ import type {
   PresupuestoMensual,
   Evento,
   LeadEstado,
+  TareaEstado,
   MetricasOverview,
   ResumenFinanciero,
 } from '@/types'
@@ -73,6 +63,29 @@ export async function createLead(lead: Partial<Lead>): Promise<Lead> {
   return data as unknown as Lead
 }
 
+export async function updateLead(id: string, updates: Partial<Lead>): Promise<Lead> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('leads')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as unknown as Lead
+}
+
+export async function deleteLead(id: string): Promise<void> {
+  const sb = getSupabaseBrowser()
+  const { error } = await sb
+    .from('leads')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 // ─── TAREAS ──────────────────────────────────
 
 export async function getTareas(estado?: string): Promise<Tarea[]> {
@@ -116,6 +129,55 @@ export async function completarTarea(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function createTarea(tarea: {
+  titulo: string
+  lead_id?: string | null
+  fecha_limite?: string | null
+  recordatorio_mismo_dia?: boolean
+  hora_recordatorio?: string
+}): Promise<Tarea> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('tareas')
+    .insert({
+      titulo: tarea.titulo,
+      estado: 'pendiente' as TareaEstado,
+      lead_id: tarea.lead_id || null,
+      fecha_limite: tarea.fecha_limite || null,
+      recordatorio_mismo_dia: tarea.recordatorio_mismo_dia ?? false,
+      hora_recordatorio: tarea.hora_recordatorio ?? '09:00',
+      recordatorio_dia_antes: false,
+    })
+    .select('*, lead:lead_id(nombre, empresa)')
+    .single()
+
+  if (error) throw error
+  return data as unknown as Tarea
+}
+
+export async function updateTarea(id: string, updates: Partial<Tarea>): Promise<Tarea> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('tareas')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*, lead:lead_id(nombre, empresa)')
+    .single()
+
+  if (error) throw error
+  return data as unknown as Tarea
+}
+
+export async function deleteTarea(id: string): Promise<void> {
+  const sb = getSupabaseBrowser()
+  const { error } = await sb
+    .from('tareas')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 // ─── TRANSACCIONES ───────────────────────────
 
 export async function getTransacciones(
@@ -139,6 +201,44 @@ export async function getTransacciones(
   return (data ?? []) as unknown as Transaccion[]
 }
 
+export async function createTransaccion(tx: {
+  contexto: 'personal' | 'logika'
+  tipo: 'ingreso' | 'gasto'
+  importe: number
+  descripcion: string
+  categoria_personal?: string | null
+  categoria_logika?: string | null
+  fecha?: string
+}): Promise<Transaccion> {
+  const sb = getSupabaseBrowser()
+  const { data, error } = await sb
+    .from('transacciones')
+    .insert({
+      contexto: tx.contexto,
+      tipo: tx.tipo,
+      importe: tx.importe,
+      descripcion: tx.descripcion,
+      categoria_personal: tx.categoria_personal || null,
+      categoria_logika: tx.categoria_logika || null,
+      fecha: tx.fecha ?? format(new Date(), 'yyyy-MM-dd'),
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as unknown as Transaccion
+}
+
+export async function deleteTransaccion(id: string): Promise<void> {
+  const sb = getSupabaseBrowser()
+  const { error } = await sb
+    .from('transacciones')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 export async function getResumenMensual(
   contexto: 'personal' | 'logika',
   meses: number = 6
@@ -146,7 +246,6 @@ export async function getResumenMensual(
   const sb = getSupabaseBrowser()
   const resultado: ResumenFinanciero[] = []
 
-  // Generamos los últimos N meses
   for (let i = meses - 1; i >= 0; i--) {
     const fecha = new Date()
     fecha.setMonth(fecha.getMonth() - i)
@@ -238,10 +337,6 @@ export async function getEventosSemana(): Promise<Evento[]> {
 }
 
 // ─── MÉTRICAS OVERVIEW ───────────────────────
-// Una sola función que devuelve todo lo que
-// necesita la página principal. Así hacemos
-// las queries en paralelo con Promise.all
-// en lugar de secuencialmente.
 
 export async function getMetricasOverview(): Promise<MetricasOverview> {
   const [leadsActivos, tareasPendientes, mrr, transPersonal] = await Promise.all([

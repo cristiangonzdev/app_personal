@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useLeads } from '@/hooks/useQueries'
-import { updateLeadEstado } from '@/lib/queries'
+import { updateLeadEstado, createLead, updateLead, deleteLead } from '@/lib/queries'
 import {
   Card, CardTitle, Badge, PageHeader, LoadingSpinner, EmptyState, ErrorState
 } from '@/components/ui'
+import { Modal, Input, Select, Textarea, Button } from '@/components/ui/Modal'
 import { formatEuros, LEAD_ESTADO_LABELS, LEAD_ESTADO_DOT, cn } from '@/lib/utils'
-import type { Lead, LeadEstado } from '@/types'
-import { Phone, Mail, ChevronRight, ChevronLeft, X } from 'lucide-react'
+import type { Lead, LeadEstado, LeadOrigen } from '@/types'
+import { Phone, Mail, ChevronRight, ChevronLeft, X, Plus, Edit3, Trash2 } from 'lucide-react'
 
 const PIPELINE: LeadEstado[] = [
   'prospecto',
@@ -28,10 +29,21 @@ const COL_ACCENTS: Record<LeadEstado, string> = {
   cerrado_perdido: '#ef4444',
 }
 
+const ESTADO_OPTIONS = PIPELINE.map((e) => ({ value: e, label: LEAD_ESTADO_LABELS[e] }))
+const ORIGEN_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Sin especificar' },
+  { value: 'referido', label: 'Referido' },
+  { value: 'visita', label: 'Visita' },
+  { value: 'outbound', label: 'Outbound' },
+  { value: 'inbound', label: 'Inbound' },
+]
+
 export default function CRMPage() {
   const { data: leads, loading, error, refetch } = useLeads()
   const [movingId, setMovingId] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [editingLead, setEditingLead] = useState<Lead | null>(null)
 
   const kanban = PIPELINE.map((estado) => ({
     estado,
@@ -54,6 +66,16 @@ export default function CRMPage() {
     }
   }
 
+  async function handleDelete(id: string) {
+    try {
+      await deleteLead(id)
+      setSelectedLead(null)
+      await refetch()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   if (error) return <ErrorState message={error} />
 
   return (
@@ -61,6 +83,14 @@ export default function CRMPage() {
       <PageHeader
         title="CRM"
         subtitle={`${(leads ?? []).length} leads activos en pipeline`}
+        action={
+          <button
+            onClick={() => setShowCreate(true)}
+            className="btn-glow btn-shimmer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#00d9ff]/10 border border-[#00d9ff]/20 text-[#00d9ff] hover:bg-[#00d9ff]/15 transition-all"
+          >
+            <Plus size={14} /> Nuevo lead
+          </button>
+        }
       />
 
       {loading ? (
@@ -69,7 +99,6 @@ export default function CRMPage() {
         <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 snap-x snap-mandatory">
           {kanban.map(({ estado, leads: colLeads }) => (
             <div key={estado} className="flex-shrink-0 w-[170px] md:w-[200px] snap-start">
-              {/* Column header */}
               <div
                 className="rounded-t-lg px-3 py-2 flex items-center justify-between mb-0.5"
                 style={{ borderTop: `2px solid ${COL_ACCENTS[estado]}` }}
@@ -85,7 +114,6 @@ export default function CRMPage() {
                 </span>
               </div>
 
-              {/* Cards */}
               <div className="flex flex-col gap-2">
                 {colLeads.length === 0 ? (
                   <div className="text-[11px] text-slate-700 text-center py-4 glass-card rounded-lg">
@@ -115,6 +143,11 @@ export default function CRMPage() {
         <LeadDetail
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
+          onEdit={() => {
+            setEditingLead(selectedLead)
+            setSelectedLead(null)
+          }}
+          onDelete={() => handleDelete(selectedLead.id)}
           onMover={async (dir) => {
             await moverLead(selectedLead, dir)
             const idx = PIPELINE.indexOf(selectedLead.estado)
@@ -125,6 +158,21 @@ export default function CRMPage() {
           }}
         />
       )}
+
+      {/* Create modal */}
+      <LeadFormModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSaved={refetch}
+      />
+
+      {/* Edit modal */}
+      <LeadFormModal
+        open={!!editingLead}
+        lead={editingLead ?? undefined}
+        onClose={() => setEditingLead(null)}
+        onSaved={refetch}
+      />
     </div>
   )
 }
@@ -189,24 +237,48 @@ function LeadCard({ lead, isMoving, onSelect, onMover, pipelineIndex, pipelineLe
 function LeadDetail({
   lead,
   onClose,
+  onEdit,
+  onDelete,
   onMover,
 }: {
   lead: Lead
   onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
   onMover: (dir: 'adelante' | 'atras') => void
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end overlay-backdrop" onClick={onClose}>
       <div
         className="panel-slide w-full max-w-[360px] h-full bg-[rgba(17,24,39,0.95)] backdrop-blur-2xl border-l border-[rgba(30,45,69,0.5)] p-5 md:p-6 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="btn-glow flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 mb-5 px-2 py-1 rounded-md"
-        >
-          <X size={12} /> Cerrar
-        </button>
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={onClose}
+            className="btn-glow flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1 rounded-md"
+          >
+            <X size={12} /> Cerrar
+          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onEdit}
+              className="btn-glow p-1.5 rounded-md text-slate-500 hover:text-[#00d9ff] transition-colors"
+              title="Editar"
+            >
+              <Edit3 size={14} />
+            </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="btn-glow p-1.5 rounded-md text-slate-500 hover:text-red-400 transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
 
         <h2 className="text-[18px] font-bold text-slate-100 mb-0.5">{lead.nombre}</h2>
         {lead.empresa && (
@@ -267,7 +339,8 @@ function LeadDetail({
           </div>
         )}
 
-        <div className="flex gap-2">
+        {/* Move buttons */}
+        <div className="flex gap-2 mb-4">
           <button
             onClick={() => onMover('atras')}
             disabled={PIPELINE.indexOf(lead.estado) === 0}
@@ -283,7 +356,114 @@ function LeadDetail({
             Avanzar →
           </button>
         </div>
+
+        {/* Delete confirmation */}
+        {confirmDelete && (
+          <div className="bg-red-400/5 border border-red-400/20 rounded-lg p-3 mt-3">
+            <p className="text-[12px] text-red-400 mb-3">¿Eliminar este lead? Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2">
+              <Button variant="danger" onClick={onDelete} className="flex-1">Eliminar</Button>
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)} className="flex-1">Cancelar</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  )
+}
+
+// ─── Lead Form Modal (Create / Edit) ─────────
+
+function LeadFormModal({
+  open,
+  lead,
+  onClose,
+  onSaved,
+}: {
+  open: boolean
+  lead?: Lead
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEdit = !!lead
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    nombre: lead?.nombre ?? '',
+    empresa: lead?.empresa ?? '',
+    telefono: lead?.telefono ?? '',
+    email: lead?.email ?? '',
+    sector: lead?.sector ?? '',
+    estado: lead?.estado ?? 'prospecto' as LeadEstado,
+    origen: lead?.origen ?? '' as string,
+    valor_estimado: lead?.valor_estimado?.toString() ?? '',
+    notas: lead?.notas ?? '',
+  })
+
+  function update(field: string, value: string) {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.nombre.trim()) return
+
+    setSaving(true)
+    try {
+      const payload = {
+        nombre: form.nombre.trim(),
+        empresa: form.empresa.trim() || null,
+        telefono: form.telefono.trim() || null,
+        email: form.email.trim() || null,
+        sector: form.sector.trim() || null,
+        estado: form.estado as LeadEstado,
+        origen: (form.origen || null) as LeadOrigen | null,
+        valor_estimado: form.valor_estimado ? Number(form.valor_estimado) : null,
+        notas: form.notas.trim() || null,
+      }
+
+      if (isEdit && lead) {
+        await updateLead(lead.id, payload)
+      } else {
+        await createLead(payload)
+      }
+
+      onSaved()
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Editar lead' : 'Nuevo lead'}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <Input label="Nombre *" value={form.nombre} onChange={(e) => update('nombre', e.target.value)} placeholder="Nombre del contacto" required />
+        <Input label="Empresa" value={form.empresa} onChange={(e) => update('empresa', e.target.value)} placeholder="Nombre de la empresa" />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Teléfono" value={form.telefono} onChange={(e) => update('telefono', e.target.value)} placeholder="+34 600..." type="tel" />
+          <Input label="Email" value={form.email} onChange={(e) => update('email', e.target.value)} placeholder="email@..." type="email" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Sector" value={form.sector} onChange={(e) => update('sector', e.target.value)} placeholder="Tech, salud..." />
+          <Input label="Valor estimado (€)" value={form.valor_estimado} onChange={(e) => update('valor_estimado', e.target.value)} placeholder="0" type="number" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Estado" value={form.estado} onChange={(e) => update('estado', e.target.value)} options={ESTADO_OPTIONS} />
+          <Select label="Origen" value={form.origen} onChange={(e) => update('origen', e.target.value)} options={ORIGEN_OPTIONS} />
+        </div>
+        <Textarea label="Notas" value={form.notas} onChange={(e) => update('notas', e.target.value)} placeholder="Apuntes sobre el lead..." />
+
+        <div className="flex gap-2 mt-2">
+          <Button type="submit" variant="primary" loading={saving} className="flex-1">
+            {isEdit ? 'Guardar cambios' : 'Crear lead'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onClose} className="flex-1">
+            Cancelar
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
