@@ -17,13 +17,13 @@ create trigger tg_users_profiles_updated before update on public.users_profiles
 
 alter table public.users_profiles enable row level security;
 
-create policy "profile_select_self" on public.users_profiles for select
+create policy profile_select_self on public.users_profiles for select
   to authenticated using (auth.uid() = id);
-comment on policy "profile_select_self" on public.users_profiles is 'Cada usuario ve su propio perfil.';
+comment on policy profile_select_self on public.users_profiles is 'Cada usuario ve su propio perfil.';
 
-create policy "profile_update_self" on public.users_profiles for update
+create policy profile_update_self on public.users_profiles for update
   to authenticated using (auth.uid() = id) with check (auth.uid() = id);
-comment on policy "profile_update_self" on public.users_profiles is 'Cada usuario actualiza su propio perfil.';
+comment on policy profile_update_self on public.users_profiles is 'Cada usuario actualiza su propio perfil.';
 
 -- Auto-crear perfil al alta de auth.users
 create or replace function public.fn_handle_new_user()

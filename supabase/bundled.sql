@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────
 -- CRM Logika — bundle de TODAS las migrations + seed
--- Generado: 2026-04-25T10:20:58Z
+-- Generado: 2026-04-25T10:29:05Z
 -- Pega este archivo en Supabase Dashboard > SQL Editor > Run.
 -- Idempotente: drop-if-exists antes de triggers y policies.
 -- ─────────────────────────────────────────────
@@ -97,13 +97,15 @@ create trigger tg_users_profiles_updated before update on public.users_profiles
 
 alter table public.users_profiles enable row level security;
 
-create policy "profile_select_self" on public.users_profiles for select
+drop policy if exists profile_select_self on public.users_profiles;
+create policy profile_select_self on public.users_profiles for select
   to authenticated using (auth.uid() = id);
-comment on policy "profile_select_self" on public.users_profiles is 'Cada usuario ve su propio perfil.';
+comment on policy profile_select_self on public.users_profiles is 'Cada usuario ve su propio perfil.';
 
-create policy "profile_update_self" on public.users_profiles for update
+drop policy if exists profile_update_self on public.users_profiles;
+create policy profile_update_self on public.users_profiles for update
   to authenticated using (auth.uid() = id) with check (auth.uid() = id);
-comment on policy "profile_update_self" on public.users_profiles is 'Cada usuario actualiza su propio perfil.';
+comment on policy profile_update_self on public.users_profiles is 'Cada usuario actualiza su propio perfil.';
 
 -- Auto-crear perfil al alta de auth.users
 create or replace function public.fn_handle_new_user()
