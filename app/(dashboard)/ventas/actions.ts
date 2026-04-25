@@ -12,7 +12,7 @@ export async function moveDealStage(dealId: string, nextStage: string) {
   const sb = await getSupabaseServer()
 
   if (stage === 'ganado') {
-    const { data, error } = await sb.rpc('fn_deal_won', { p_deal_id: dealId })
+    const { data, error } = await sb.rpc('fn_deal_won' as never, { p_deal_id: dealId } as never)
     if (error) return { ok: false, error: error.message }
     await emitEvent('deal.won', { deal_id: dealId, client_id: data })
     revalidatePath('/ventas')

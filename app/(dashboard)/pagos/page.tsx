@@ -10,7 +10,7 @@ export default async function PagosPage() {
   const sb = await getSupabaseServer()
 
   const [mrrRes, { data: invoices }, { data: subs }] = await Promise.all([
-    sb.rpc('fn_calculate_mrr', { period: new Date().toISOString().slice(0, 10) }),
+    sb.rpc('fn_calculate_mrr' as never, { period: new Date().toISOString().slice(0, 10) } as never),
     sb.from('invoices').select('id,number,status,total,subtotal,igic_amount,due_date,issue_date,client_id,clients(legal_name,commercial_name)').is('deleted_at', null).order('issue_date', { ascending: false, nullsFirst: false }),
     sb.from('subscriptions').select('id,service,amount_monthly,status,starts_on,client_id,clients(legal_name,commercial_name)').eq('status', 'activa'),
   ])

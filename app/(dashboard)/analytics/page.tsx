@@ -11,7 +11,7 @@ export default async function AnalyticsPage() {
     sb.from('deals').select('stage,setup_amount,recurring_amount,services,probability').is('deleted_at', null),
     sb.from('invoices').select('total,status,issue_date,client_id').is('deleted_at', null),
     sb.from('subscriptions').select('amount_monthly,service,status,client_id').eq('status', 'activa'),
-    sb.rpc('fn_calculate_mrr', { period: new Date().toISOString().slice(0, 10) }),
+    sb.rpc('fn_calculate_mrr' as never, { period: new Date().toISOString().slice(0, 10) } as never),
   ])
 
   const mrr = Number(mrrRes.data ?? 0)

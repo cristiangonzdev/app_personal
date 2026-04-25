@@ -1,32 +1,31 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const COOKIE_NAME = 'logika-crm'
+// Hasta que generemos types/database.ts con `pnpm db:types`, tipamos como any
+// para evitar fricción con TS estricto en filas/RPC.
+type AnyClient = SupabaseClient<any, 'public', any>
 
-export async function getSupabaseServer() {
-  const cookieStore = await cookies()
-  return createServerClient(
+let _anon: AnyClient | null = null
+let _service: AnyClient | null = null
+
+// Cliente anónimo sin cookies. Modo single-user: lecturas/escrituras desde
+// Server Components vía RLS de anon. Sin auth.getUser() para no añadir round-trips.
+export async function getSupabaseServer(): Promise<AnyClient> {
+  if (_anon) return _anon
+  _anon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookieOptions: { name: COOKIE_NAME },
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet: { name: string; value: string; options?: CookieOptions }[]) => {
-          for (const c of toSet) {
-            cookieStore.set(c.name, c.value, c.options as CookieOptions)
-          }
-        },
-      },
-    },
-  )
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  ) as AnyClient
+  return _anon
 }
 
-export async function getSupabaseService() {
-  const { createClient } = await import('@supabase/supabase-js')
-  return createClient(
+// Service role: bypassa RLS. Solo para webhooks inbound y operaciones de cron.
+export async function getSupabaseService(): Promise<AnyClient> {
+  if (_service) return _service
+  _service = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  )
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  ) as AnyClient
+  return _service
 }

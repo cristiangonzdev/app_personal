@@ -11,7 +11,7 @@ export default async function CockpitPage() {
   const sb = await getSupabaseServer()
 
   const [mrrRes, dealsRes, invoicesRes, commsRes] = await Promise.all([
-    sb.rpc('fn_calculate_mrr', { period: new Date().toISOString().slice(0, 10) }),
+    sb.rpc('fn_calculate_mrr' as never, { period: new Date().toISOString().slice(0, 10) } as never),
     sb.from('deals').select('id,title,stage,setup_amount,recurring_amount,probability,score,last_activity_at,expected_close,client_id').is('deleted_at', null),
     sb.from('invoices').select('id,number,total,status,due_date,client_id').is('deleted_at', null),
     sb.from('communications').select('id,channel,from_addr,body,occurred_at,needs_attention').eq('needs_attention', true).order('occurred_at', { ascending: false }).limit(5),
