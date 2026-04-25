@@ -30,19 +30,21 @@ export async function moveDealStage(dealId: string, nextStage: string) {
   return { ok: true }
 }
 
-const newDealSchema = z.object({
+const dealSchema = z.object({
   title: z.string().min(2),
+  client_id: z.string().uuid().optional().nullable().or(z.literal('')).transform(v => v || null),
   setup_amount: z.coerce.number().nonnegative().default(0),
   recurring_amount: z.coerce.number().nonnegative().default(0),
   probability: z.coerce.number().min(0).max(100).default(20),
+  stage: z.enum(['lead', 'cualificado', 'propuesta', 'negociacion', 'ganado', 'perdido']).default('lead'),
   source: z.enum(['linkedin', 'referido', 'cold_outreach', 'inbound_web', 'otro']).default('inbound_web'),
   services: z.string().transform((s) => s.split(',').map(x => x.trim()).filter(Boolean)).default(''),
-  expected_close: z.string().optional().nullable(),
+  expected_close: z.string().optional().nullable().transform(v => v || null),
+  notes: z.string().optional().nullable(),
 })
 
 export async function createDeal(formData: FormData) {
-  const raw = Object.fromEntries(formData)
-  const parsed = newDealSchema.parse(raw)
+  const parsed = dealSchema.parse(Object.fromEntries(formData))
   const sb = await getSupabaseServer()
   const { data, error } = await sb
     .from('deals')
@@ -53,6 +55,26 @@ export async function createDeal(formData: FormData) {
   await emitEvent('deal.created', { deal_id: data.id })
   revalidatePath('/ventas')
   return { ok: true, id: data.id }
+}
+
+export async function updateDeal(id: string, formData: FormData) {
+  const parsed = dealSchema.parse(Object.fromEntries(formData))
+  const sb = await getSupabaseServer()
+  const { error } = await sb
+    .from('deals')
+    .update({ ...parsed, services: parsed.services as string[], last_activity_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/ventas')
+  return { ok: true }
+}
+
+export async function archiveDeal(id: string) {
+  const sb = await getSupabaseServer()
+  const { error } = await sb.from('deals').update({ deleted_at: new Date().toISOString() }).eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/ventas')
+  return { ok: true }
 }
 
 export async function addDealNote(dealId: string, body: string) {

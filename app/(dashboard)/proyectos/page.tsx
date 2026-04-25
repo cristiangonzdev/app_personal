@@ -3,21 +3,24 @@ import { Card, Badge } from '@/components/ui'
 import { formatFechaCorta, pickRel } from '@/lib/utils'
 import { STATUS_LABELS, SERVICE_LABELS } from '@/types'
 import Link from 'next/link'
+import { NewProjectButton } from './project-form'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProyectosPage() {
   const sb = await getSupabaseServer()
-  const { data: projects } = await sb
-    .from('projects')
-    .select('id,name,kind,status,starts_on,ends_on,client_id,clients(legal_name,commercial_name)')
-    .is('deleted_at', null)
-    .order('starts_on', { ascending: false })
+  const [{ data: projects }, { data: tasks }, { data: clients }] = await Promise.all([
+    sb.from('projects')
+      .select('id,name,kind,status,starts_on,ends_on,client_id,clients(legal_name,commercial_name)')
+      .is('deleted_at', null)
+      .order('starts_on', { ascending: false }),
+    sb.from('tasks').select('project_id,status').is('deleted_at', null),
+    sb.from('clients').select('id,legal_name,commercial_name').is('deleted_at', null).order('legal_name'),
+  ])
 
-  const { data: tasks } = await sb
-    .from('tasks')
-    .select('project_id,status')
-    .is('deleted_at', null)
+  const clientOptions = (clients ?? []).map((c: { id: string; legal_name: string; commercial_name: string | null }) => ({
+    id: c.id, name: c.commercial_name || c.legal_name,
+  }))
 
   const taskStats = new Map<string, { done: number; total: number }>()
   for (const t of tasks ?? []) {
@@ -29,7 +32,10 @@ export default async function ProyectosPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-semibold tracking-tight">Proyectos</h1>
+      <header className="flex items-end justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Proyectos</h1>
+        <NewProjectButton clients={clientOptions} />
+      </header>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
         {(projects ?? []).map(p => {
           const stats = taskStats.get(p.id) ?? { done: 0, total: 0 }

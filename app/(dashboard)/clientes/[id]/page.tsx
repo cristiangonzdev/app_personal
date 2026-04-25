@@ -4,6 +4,9 @@ import { formatEuros, formatFechaCorta } from '@/lib/utils'
 import { STATUS_LABELS, type ProjectStatus, type InvoiceStatus } from '@/types'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { EditClientButton } from '../client-form'
+import { ArchiveClientButton } from '../archive-button'
+import { ContactForm, ContactDeleteButton } from './contact-controls'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,14 +29,20 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <header>
-        <Link href="/clientes" className="text-[11px] text-slate-500 hover:text-accent-cyan">← Clientes</Link>
-        <h1 className="text-2xl font-semibold tracking-tight mt-1">{client.commercial_name || client.legal_name}</h1>
-        <div className="flex items-center gap-2 mt-2">
-          <Badge tone={client.client_type === 'recurrente' ? 'green' : client.client_type === 'one_shot' ? 'cyan' : 'slate'}>{client.client_type}</Badge>
-          {client.fiscal_id && <span className="text-[11px] font-mono text-slate-500">{client.fiscal_id}</span>}
-          {client.igic && <Badge tone="amber">IGIC 7%</Badge>}
-          {mrr > 0 && <span className="text-[12px] font-mono text-accent-green">MRR {formatEuros(mrr)}</span>}
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <Link href="/clientes" className="text-[11px] text-slate-500 hover:text-accent-cyan">← Clientes</Link>
+          <h1 className="text-2xl font-semibold tracking-tight mt-1">{client.commercial_name || client.legal_name}</h1>
+          <div className="flex items-center gap-2 mt-2">
+            <Badge tone={client.client_type === 'recurrente' ? 'green' : client.client_type === 'one_shot' ? 'cyan' : 'slate'}>{client.client_type}</Badge>
+            {client.fiscal_id && <span className="text-[11px] font-mono text-slate-500">{client.fiscal_id}</span>}
+            {client.igic && <Badge tone="amber">IGIC 7%</Badge>}
+            {mrr > 0 && <span className="text-[12px] font-mono text-accent-green">MRR {formatEuros(mrr)}</span>}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <EditClientButton client={client} />
+          <ArchiveClientButton id={client.id} redirect="/clientes" />
         </div>
       </header>
 
@@ -49,15 +58,21 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Contactos</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Contactos</CardTitle>
+            <ContactForm clientId={client.id} />
+          </CardHeader>
           {(contacts ?? []).length === 0 ? (
             <div className="text-[11px] text-slate-600">Sin contactos</div>
           ) : (
             <ul className="space-y-2">
               {contacts!.map(c => (
-                <li key={c.id} className="text-[12px]">
-                  <div className="text-slate-200">{c.full_name} {c.is_primary && <span className="text-[9px] text-accent-cyan ml-1">PRIMARY</span>}</div>
-                  <div className="text-[10px] text-slate-600 font-mono">{c.email ?? c.phone ?? '—'}</div>
+                <li key={c.id} className="text-[12px] flex items-start justify-between gap-2 group">
+                  <div>
+                    <div className="text-slate-200">{c.full_name} {c.is_primary && <span className="text-[9px] text-accent-cyan ml-1">PRIMARY</span>}</div>
+                    <div className="text-[10px] text-slate-600 font-mono">{c.email ?? c.phone ?? '—'}</div>
+                  </div>
+                  <ContactDeleteButton id={c.id} clientId={client.id} />
                 </li>
               ))}
             </ul>

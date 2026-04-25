@@ -2,6 +2,7 @@ import { getSupabaseServer } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Badge, Card } from '@/components/ui'
 import { formatEuros, formatFechaCorta } from '@/lib/utils'
+import { NewClientButton } from './client-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,7 @@ export default async function ClientesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-[12px] text-slate-500 mt-0.5">{clients?.length ?? 0} cuentas</p>
         </div>
+        <NewClientButton />
       </header>
 
       <Card className="p-0 overflow-hidden">

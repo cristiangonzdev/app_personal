@@ -5,36 +5,48 @@ import { STATUS_LABELS } from '@/types'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { updateTaskStatus } from './actions'
+import { NewTaskInline, TaskDeleteButton } from './task-controls'
+import { EditProjectButton } from '../project-form'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const sb = await getSupabaseServer()
-  const [{ data: project }, { data: tasks }, { data: milestones }] = await Promise.all([
+  const [{ data: project }, { data: tasks }, { data: milestones }, { data: clients }] = await Promise.all([
     sb.from('projects').select('*,clients(legal_name,commercial_name)').eq('id', id).is('deleted_at', null).single(),
     sb.from('tasks').select('*').eq('project_id', id).is('deleted_at', null).order('due_on', { nullsFirst: false }),
     sb.from('milestones').select('*').eq('project_id', id).order('due_on'),
+    sb.from('clients').select('id,legal_name,commercial_name').is('deleted_at', null).order('legal_name'),
   ])
 
   if (!project) notFound()
   const client = pickRel((project as unknown as { clients: { legal_name: string; commercial_name: string | null } | { legal_name: string; commercial_name: string | null }[] | null }).clients)
+  const clientList = (clients ?? []).map((c: { id: string; legal_name: string; commercial_name: string | null }) => ({
+    id: c.id, name: c.commercial_name || c.legal_name,
+  }))
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <header>
-        <Link href="/proyectos" className="text-[11px] text-slate-500 hover:text-accent-cyan">← Proyectos</Link>
-        <h1 className="text-2xl font-semibold mt-1">{project.name}</h1>
-        <div className="text-[12px] text-slate-500 mt-1">{client?.commercial_name || client?.legal_name}</div>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <Link href="/proyectos" className="text-[11px] text-slate-500 hover:text-accent-cyan">← Proyectos</Link>
+          <h1 className="text-2xl font-semibold mt-1">{project.name}</h1>
+          <div className="text-[12px] text-slate-500 mt-1">{client?.commercial_name || client?.legal_name}</div>
+        </div>
+        <EditProjectButton project={project} clients={clientList} />
       </header>
 
       <Card>
-        <CardHeader><CardTitle>Tareas</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Tareas</CardTitle>
+          <NewTaskInline projectId={project.id} />
+        </CardHeader>
         <ul className="space-y-1.5">
           {(tasks ?? []).map(t => {
             const venc = t.status !== 'done' && isVencida(t.due_on)
             return (
-              <li key={t.id} className="flex items-center gap-2.5 text-[12px] py-1.5 px-2 rounded hover:bg-bg-surface2/40">
+              <li key={t.id} className="group flex items-center gap-2.5 text-[12px] py-1.5 px-2 rounded hover:bg-bg-surface2/40">
                 <form action={updateTaskStatus.bind(null, t.id, t.status === 'done' ? 'todo' : 'done')}>
                   <button type="submit" className={`w-4 h-4 rounded border ${t.status === 'done' ? 'bg-accent-green/20 border-accent-green' : 'border-border-hi hover:border-accent-cyan'} flex items-center justify-center`}>
                     {t.status === 'done' && <span className="text-accent-green text-[10px]">✓</span>}
@@ -49,6 +61,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     {formatFechaCorta(t.due_on)}
                   </span>
                 )}
+                <TaskDeleteButton id={t.id} projectId={project.id} />
               </li>
             )
           })}

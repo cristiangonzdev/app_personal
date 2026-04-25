@@ -1,6 +1,7 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { Card, CardHeader, CardTitle, Badge } from '@/components/ui'
 import { formatFechaCorta } from '@/lib/utils'
+import { NewContentButton, NewCampaignButton, NewHookInline, HookDeleteButton, ContentRowMenu } from './forms'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,10 @@ export default async function MarketingPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-semibold tracking-tight">Marketing</h1>
+      <header className="flex items-end justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Marketing</h1>
+        <NewContentButton campaigns={(campaigns ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))} />
+      </header>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -30,6 +34,7 @@ export default async function MarketingPage() {
                 <th className="text-left font-normal">Plataforma</th>
                 <th className="text-left font-normal">Estado</th>
                 <th className="text-right font-normal">Programado</th>
+                <th className="w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -45,6 +50,7 @@ export default async function MarketingPage() {
                     {c.needs_editor && <Badge tone="amber" className="ml-1">EDITOR</Badge>}
                   </td>
                   <td className="text-right font-mono text-slate-500">{formatFechaCorta(c.scheduled_at)}</td>
+                  <td className="text-right pr-2"><ContentRowMenu id={c.id} status={c.status} /></td>
                 </tr>
               ))}
             </tbody>
@@ -53,7 +59,10 @@ export default async function MarketingPage() {
 
         <div className="space-y-4">
           <Card>
-            <CardHeader><CardTitle>Campañas</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Campañas</CardTitle>
+              <NewCampaignButton />
+            </CardHeader>
             <ul className="space-y-2 text-[12px]">
               {(campaigns ?? []).map(c => (
                 <li key={c.id} className="flex justify-between items-baseline">
@@ -65,12 +74,18 @@ export default async function MarketingPage() {
             </ul>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Banco de hooks</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Banco de hooks</CardTitle>
+            </CardHeader>
+            <NewHookInline />
             <ul className="space-y-2 text-[12px]">
               {(hooks ?? []).map(h => (
-                <li key={h.id} className="border-l-2 border-accent-violet pl-2.5">
-                  <div className="text-slate-300 italic">"{h.phrase}"</div>
-                  {h.angle && <div className="text-[10px] text-slate-600 mt-0.5 uppercase tracking-wider">{h.angle}</div>}
+                <li key={h.id} className="group flex items-start justify-between gap-2 border-l-2 border-accent-violet pl-2.5">
+                  <div>
+                    <div className="text-slate-300 italic">&ldquo;{h.phrase}&rdquo;</div>
+                    {h.angle && <div className="text-[10px] text-slate-600 mt-0.5 uppercase tracking-wider">{h.angle}</div>}
+                  </div>
+                  <HookDeleteButton id={h.id} />
                 </li>
               ))}
             </ul>

@@ -3,17 +3,22 @@ import { Card, CardHeader, CardTitle, Badge } from '@/components/ui'
 import { formatEuros, formatFechaCorta, isVencida, pickRel } from '@/lib/utils'
 import { STATUS_LABELS } from '@/types'
 import Link from 'next/link'
+import { NewInvoiceButton, NewSubscriptionButton, InvoiceMenu, SubscriptionMenu } from './forms'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PagosPage() {
   const sb = await getSupabaseServer()
 
-  const [mrrRes, { data: invoices }, { data: subs }] = await Promise.all([
+  const [mrrRes, { data: invoices }, { data: subs }, { data: clients }] = await Promise.all([
     sb.rpc('fn_calculate_mrr' as never, { period: new Date().toISOString().slice(0, 10) } as never),
     sb.from('invoices').select('id,number,status,total,subtotal,igic_amount,due_date,issue_date,client_id,clients(legal_name,commercial_name)').is('deleted_at', null).order('issue_date', { ascending: false, nullsFirst: false }),
     sb.from('subscriptions').select('id,service,amount_monthly,status,starts_on,client_id,clients(legal_name,commercial_name)').eq('status', 'activa'),
+    sb.from('clients').select('id,legal_name,commercial_name').is('deleted_at', null).order('legal_name'),
   ])
+  const clientOptions = (clients ?? []).map((c: { id: string; legal_name: string; commercial_name: string | null }) => ({
+    id: c.id, name: c.commercial_name || c.legal_name,
+  }))
 
   const mrr = Number(mrrRes.data ?? 0)
   const arr = mrr * 12
@@ -22,7 +27,13 @@ export default async function PagosPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-semibold tracking-tight">Pagos & facturación</h1>
+      <header className="flex items-end justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Pagos & facturación</h1>
+        <div className="flex gap-2">
+          <NewSubscriptionButton clients={clientOptions} />
+          <NewInvoiceButton clients={clientOptions} />
+        </div>
+      </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="MRR activo" value={formatEuros(mrr)} accent="green" />
@@ -41,6 +52,7 @@ export default async function PagosPage() {
                 <th className="text-left font-normal">Servicio</th>
                 <th className="text-right font-normal">€/mes</th>
                 <th className="text-right font-normal">Alta</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
@@ -52,6 +64,7 @@ export default async function PagosPage() {
                     <td className="text-slate-400">{s.service}</td>
                     <td className="text-right font-mono text-accent-green">{formatEuros(Number(s.amount_monthly))}</td>
                     <td className="text-right font-mono text-slate-600">{formatFechaCorta(s.starts_on)}</td>
+                    <td className="text-right pr-2"><SubscriptionMenu id={s.id} /></td>
                   </tr>
                 )
               })}
@@ -72,6 +85,7 @@ export default async function PagosPage() {
               <th className="text-right font-normal">IGIC</th>
               <th className="text-right font-normal">Total</th>
               <th className="text-right font-normal">Vencimiento</th>
+              <th className="w-8"></th>
             </tr>
           </thead>
           <tbody>
@@ -89,6 +103,7 @@ export default async function PagosPage() {
                   <td className="text-right font-mono text-slate-500">{formatEuros(Number(i.igic_amount))}</td>
                   <td className="text-right font-mono text-slate-200">{formatEuros(Number(i.total))}</td>
                   <td className={`text-right font-mono ${venc ? 'text-accent-red' : 'text-slate-500'}`}>{formatFechaCorta(i.due_date)}</td>
+                  <td className="text-right pr-2"><InvoiceMenu id={i.id} status={i.status} /></td>
                 </tr>
               )
             })}

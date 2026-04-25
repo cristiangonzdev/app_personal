@@ -5,11 +5,12 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { toast } from 'sonner'
 import { DEAL_STAGES, SERVICE_LABELS, type Deal, type DealStage } from '@/types'
 import { formatEuros, formatFechaCorta } from '@/lib/utils'
-import { moveDealStage } from './actions'
+import { moveDealStage, archiveDeal } from './actions'
 import { getSupabaseBrowser } from '@/lib/supabase/client'
-import { Sparkles, Clock } from 'lucide-react'
+import { Sparkles, Clock, Trash2 } from 'lucide-react'
+import { EditDealButton } from './deal-form'
 
-export function Kanban({ initialDeals }: { initialDeals: Deal[] }) {
+export function Kanban({ initialDeals, clients }: { initialDeals: Deal[]; clients: { id: string; name: string }[] }) {
   const [deals, setDeals] = useState<Deal[]>(initialDeals)
   const [, startTransition] = useTransition()
 
@@ -78,7 +79,7 @@ export function Kanban({ initialDeals }: { initialDeals: Deal[] }) {
                             ref={p.innerRef}
                             {...p.draggableProps}
                             {...p.dragHandleProps}
-                            className="kanban-card rounded-md border border-border bg-bg-surface px-3 py-2.5 cursor-grab active:cursor-grabbing"
+                            className="kanban-card group rounded-md border border-border bg-bg-surface px-3 py-2.5 cursor-grab active:cursor-grabbing"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <span className="text-[12px] font-medium text-slate-200 line-clamp-2">{d.title}</span>
@@ -113,6 +114,21 @@ export function Kanban({ initialDeals }: { initialDeals: Deal[] }) {
                                 → {d.next_best_action}
                               </div>
                             )}
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border opacity-0 group-hover:opacity-100 transition-opacity" onMouseDown={(e) => e.stopPropagation()}>
+                              <EditDealButton deal={d} clients={clients} />
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  if (!confirm('¿Archivar este deal?')) return
+                                  const res = await archiveDeal(d.id)
+                                  if (res.ok) { toast.success('Deal archivado'); setDeals(prev => prev.filter(x => x.id !== d.id)) }
+                                  else toast.error(res.error || 'Error')
+                                }}
+                                className="text-[10px] text-slate-600 hover:text-accent-red flex items-center gap-1"
+                              >
+                                <Trash2 size={11} />Archivar
+                              </button>
+                            </div>
                           </div>
                         )}
                       </Draggable>
