@@ -1,10 +1,12 @@
-node_modules
 node_modules/
-.env.local
-.env*.local
-.vercel
 .next/
+.vercel/
+.env*.local
 .claude/
 build_log.txt
+ts_errors.txt
 next-env.d.ts
 tsconfig.tsbuildinfo
+*.tsbuildinfo
+supabase/.branches/
+supabase/.temp/
