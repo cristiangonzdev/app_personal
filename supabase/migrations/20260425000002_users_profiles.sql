@@ -11,6 +11,7 @@ create table if not exists public.users_profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_users_profiles_updated on public.users_profiles;
 create trigger tg_users_profiles_updated before update on public.users_profiles
   for each row execute function public.fn_set_updated_at();
 

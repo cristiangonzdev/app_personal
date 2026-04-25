@@ -30,6 +30,7 @@ create index if not exists idx_deals_owner on public.deals(owner_id);
 create index if not exists idx_deals_client on public.deals(client_id);
 create index if not exists idx_deals_close on public.deals(expected_close);
 create index if not exists idx_deals_alive on public.deals(deleted_at) where deleted_at is null;
+drop trigger if exists tg_deals_updated on public.deals;
 create trigger tg_deals_updated before update on public.deals
   for each row execute function public.fn_set_updated_at();
 

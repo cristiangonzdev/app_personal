@@ -29,6 +29,7 @@ create index if not exists idx_clients_type on public.clients(client_type);
 create index if not exists idx_clients_tags_gin on public.clients using gin (tags);
 create index if not exists idx_clients_custom_gin on public.clients using gin (custom_fields jsonb_path_ops);
 create index if not exists idx_clients_alive on public.clients(deleted_at) where deleted_at is null;
+drop trigger if exists tg_clients_updated on public.clients;
 create trigger tg_clients_updated before update on public.clients
   for each row execute function public.fn_set_updated_at();
 
@@ -48,6 +49,7 @@ create table if not exists public.contacts (
 create index if not exists idx_contacts_client on public.contacts(client_id);
 create index if not exists idx_contacts_phone on public.contacts(phone) where phone is not null;
 create index if not exists idx_contacts_email on public.contacts(email) where email is not null;
+drop trigger if exists tg_contacts_updated on public.contacts;
 create trigger tg_contacts_updated before update on public.contacts
   for each row execute function public.fn_set_updated_at();
 

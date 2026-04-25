@@ -35,6 +35,7 @@ create table if not exists public.message_templates (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_templates_updated on public.message_templates;
 create trigger tg_templates_updated before update on public.message_templates
   for each row execute function public.fn_set_updated_at();
 

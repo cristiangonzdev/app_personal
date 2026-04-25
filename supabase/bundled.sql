@@ -1,8 +1,8 @@
 -- ─────────────────────────────────────────────
 -- CRM Logika — bundle de TODAS las migrations + seed
--- Generado: 2026-04-25T10:18:12Z
+-- Generado: 2026-04-25T10:20:58Z
 -- Pega este archivo en Supabase Dashboard > SQL Editor > Run.
--- Idempotente: si ya está aplicado no rompe.
+-- Idempotente: drop-if-exists antes de triggers y policies.
 -- ─────────────────────────────────────────────
 
 
@@ -91,6 +91,7 @@ create table if not exists public.users_profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_users_profiles_updated on public.users_profiles;
 create trigger tg_users_profiles_updated before update on public.users_profiles
   for each row execute function public.fn_set_updated_at();
 
@@ -151,6 +152,7 @@ create index if not exists idx_clients_type on public.clients(client_type);
 create index if not exists idx_clients_tags_gin on public.clients using gin (tags);
 create index if not exists idx_clients_custom_gin on public.clients using gin (custom_fields jsonb_path_ops);
 create index if not exists idx_clients_alive on public.clients(deleted_at) where deleted_at is null;
+drop trigger if exists tg_clients_updated on public.clients;
 create trigger tg_clients_updated before update on public.clients
   for each row execute function public.fn_set_updated_at();
 
@@ -170,6 +172,7 @@ create table if not exists public.contacts (
 create index if not exists idx_contacts_client on public.contacts(client_id);
 create index if not exists idx_contacts_phone on public.contacts(phone) where phone is not null;
 create index if not exists idx_contacts_email on public.contacts(email) where email is not null;
+drop trigger if exists tg_contacts_updated on public.contacts;
 create trigger tg_contacts_updated before update on public.contacts
   for each row execute function public.fn_set_updated_at();
 
@@ -177,22 +180,30 @@ alter table public.clients enable row level security;
 alter table public.contacts enable row level security;
 
 -- v1 single-user: authenticated tiene acceso total a filas no borradas
+drop policy if exists clients_select on public.clients;
 create policy clients_select on public.clients for select to authenticated
   using (deleted_at is null);
 comment on policy clients_select on public.clients is 'authenticated lee todos los clientes vivos.';
+drop policy if exists clients_insert on public.clients;
 create policy clients_insert on public.clients for insert to authenticated
   with check (true);
 comment on policy clients_insert on public.clients is 'authenticated crea clientes.';
+drop policy if exists clients_update on public.clients;
 create policy clients_update on public.clients for update to authenticated
   using (true) with check (true);
 comment on policy clients_update on public.clients is 'authenticated edita clientes (incluye soft-delete).';
+drop policy if exists clients_delete on public.clients;
 create policy clients_delete on public.clients for delete to authenticated
   using (false);
 comment on policy clients_delete on public.clients is 'Hard-delete prohibido en v1, usar soft-delete via update.';
 
+drop policy if exists contacts_select on public.contacts;
 create policy contacts_select on public.contacts for select to authenticated using (deleted_at is null);
+drop policy if exists contacts_insert on public.contacts;
 create policy contacts_insert on public.contacts for insert to authenticated with check (true);
+drop policy if exists contacts_update on public.contacts;
 create policy contacts_update on public.contacts for update to authenticated using (true) with check (true);
+drop policy if exists contacts_delete on public.contacts;
 create policy contacts_delete on public.contacts for delete to authenticated using (false);
 
 
@@ -229,6 +240,7 @@ create index if not exists idx_deals_owner on public.deals(owner_id);
 create index if not exists idx_deals_client on public.deals(client_id);
 create index if not exists idx_deals_close on public.deals(expected_close);
 create index if not exists idx_deals_alive on public.deals(deleted_at) where deleted_at is null;
+drop trigger if exists tg_deals_updated on public.deals;
 create trigger tg_deals_updated before update on public.deals
   for each row execute function public.fn_set_updated_at();
 
@@ -245,14 +257,22 @@ create index if not exists idx_deal_notes_deal on public.deal_notes(deal_id, cre
 alter table public.deals enable row level security;
 alter table public.deal_notes enable row level security;
 
+drop policy if exists deals_select on public.deals;
 create policy deals_select on public.deals for select to authenticated using (deleted_at is null);
+drop policy if exists deals_insert on public.deals;
 create policy deals_insert on public.deals for insert to authenticated with check (true);
+drop policy if exists deals_update on public.deals;
 create policy deals_update on public.deals for update to authenticated using (true) with check (true);
+drop policy if exists deals_delete on public.deals;
 create policy deals_delete on public.deals for delete to authenticated using (false);
 
+drop policy if exists deal_notes_select on public.deal_notes;
 create policy deal_notes_select on public.deal_notes for select to authenticated using (true);
+drop policy if exists deal_notes_insert on public.deal_notes;
 create policy deal_notes_insert on public.deal_notes for insert to authenticated with check (true);
+drop policy if exists deal_notes_update on public.deal_notes;
 create policy deal_notes_update on public.deal_notes for update to authenticated using (true) with check (true);
+drop policy if exists deal_notes_delete on public.deal_notes;
 create policy deal_notes_delete on public.deal_notes for delete to authenticated using (false);
 
 -- View: forecast weighted
@@ -293,6 +313,7 @@ create table if not exists public.projects (
 create index if not exists idx_projects_client on public.projects(client_id);
 create index if not exists idx_projects_status on public.projects(status);
 create index if not exists idx_projects_alive on public.projects(deleted_at) where deleted_at is null;
+drop trigger if exists tg_projects_updated on public.projects;
 create trigger tg_projects_updated before update on public.projects
   for each row execute function public.fn_set_updated_at();
 
@@ -315,6 +336,7 @@ create index if not exists idx_tasks_project on public.tasks(project_id);
 create index if not exists idx_tasks_assignee on public.tasks(assignee_id);
 create index if not exists idx_tasks_status on public.tasks(status);
 create index if not exists idx_tasks_due on public.tasks(due_on);
+drop trigger if exists tg_tasks_updated on public.tasks;
 create trigger tg_tasks_updated before update on public.tasks
   for each row execute function public.fn_set_updated_at();
 
@@ -330,6 +352,7 @@ create table if not exists public.milestones (
   updated_at timestamptz not null default now()
 );
 create index if not exists idx_milestones_project on public.milestones(project_id);
+drop trigger if exists tg_milestones_updated on public.milestones;
 create trigger tg_milestones_updated before update on public.milestones
   for each row execute function public.fn_set_updated_at();
 
@@ -337,19 +360,31 @@ alter table public.projects enable row level security;
 alter table public.tasks enable row level security;
 alter table public.milestones enable row level security;
 
+drop policy if exists projects_select on public.projects;
 create policy projects_select on public.projects for select to authenticated using (deleted_at is null);
+drop policy if exists projects_insert on public.projects;
 create policy projects_insert on public.projects for insert to authenticated with check (true);
+drop policy if exists projects_update on public.projects;
 create policy projects_update on public.projects for update to authenticated using (true) with check (true);
+drop policy if exists projects_delete on public.projects;
 create policy projects_delete on public.projects for delete to authenticated using (false);
 
+drop policy if exists tasks_select on public.tasks;
 create policy tasks_select on public.tasks for select to authenticated using (deleted_at is null);
+drop policy if exists tasks_insert on public.tasks;
 create policy tasks_insert on public.tasks for insert to authenticated with check (true);
+drop policy if exists tasks_update on public.tasks;
 create policy tasks_update on public.tasks for update to authenticated using (true) with check (true);
+drop policy if exists tasks_delete on public.tasks;
 create policy tasks_delete on public.tasks for delete to authenticated using (false);
 
+drop policy if exists milestones_select on public.milestones;
 create policy milestones_select on public.milestones for select to authenticated using (true);
+drop policy if exists milestones_insert on public.milestones;
 create policy milestones_insert on public.milestones for insert to authenticated with check (true);
+drop policy if exists milestones_update on public.milestones;
 create policy milestones_update on public.milestones for update to authenticated using (true) with check (true);
+drop policy if exists milestones_delete on public.milestones;
 create policy milestones_delete on public.milestones for delete to authenticated using (false);
 
 -- Plantillas de tareas por tipo de proyecto
@@ -411,6 +446,7 @@ create table if not exists public.subscriptions (
 );
 create index if not exists idx_subscriptions_client on public.subscriptions(client_id);
 create index if not exists idx_subscriptions_status on public.subscriptions(status);
+drop trigger if exists tg_subscriptions_updated on public.subscriptions;
 create trigger tg_subscriptions_updated before update on public.subscriptions
   for each row execute function public.fn_set_updated_at();
 
@@ -439,6 +475,7 @@ create table if not exists public.invoices (
 create index if not exists idx_invoices_status on public.invoices(status);
 create index if not exists idx_invoices_due on public.invoices(due_date);
 create index if not exists idx_invoices_client on public.invoices(client_id);
+drop trigger if exists tg_invoices_updated on public.invoices;
 create trigger tg_invoices_updated before update on public.invoices
   for each row execute function public.fn_set_updated_at();
 
@@ -456,19 +493,31 @@ alter table public.subscriptions enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_lines enable row level security;
 
+drop policy if exists subs_select on public.subscriptions;
 create policy subs_select on public.subscriptions for select to authenticated using (true);
+drop policy if exists subs_insert on public.subscriptions;
 create policy subs_insert on public.subscriptions for insert to authenticated with check (true);
+drop policy if exists subs_update on public.subscriptions;
 create policy subs_update on public.subscriptions for update to authenticated using (true) with check (true);
+drop policy if exists subs_delete on public.subscriptions;
 create policy subs_delete on public.subscriptions for delete to authenticated using (false);
 
+drop policy if exists inv_select on public.invoices;
 create policy inv_select on public.invoices for select to authenticated using (deleted_at is null);
+drop policy if exists inv_insert on public.invoices;
 create policy inv_insert on public.invoices for insert to authenticated with check (true);
+drop policy if exists inv_update on public.invoices;
 create policy inv_update on public.invoices for update to authenticated using (true) with check (true);
+drop policy if exists inv_delete on public.invoices;
 create policy inv_delete on public.invoices for delete to authenticated using (false);
 
+drop policy if exists inv_lines_select on public.invoice_lines;
 create policy inv_lines_select on public.invoice_lines for select to authenticated using (true);
+drop policy if exists inv_lines_insert on public.invoice_lines;
 create policy inv_lines_insert on public.invoice_lines for insert to authenticated with check (true);
+drop policy if exists inv_lines_update on public.invoice_lines;
 create policy inv_lines_update on public.invoice_lines for update to authenticated using (true) with check (true);
+drop policy if exists inv_lines_delete on public.invoice_lines;
 create policy inv_lines_delete on public.invoice_lines for delete to authenticated using (true);
 
 -- MRR del periodo (suma de subs activas con fecha alta <= period y baja null o > period)
@@ -520,20 +569,29 @@ create table if not exists public.message_templates (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_templates_updated on public.message_templates;
 create trigger tg_templates_updated before update on public.message_templates
   for each row execute function public.fn_set_updated_at();
 
 alter table public.communications enable row level security;
 alter table public.message_templates enable row level security;
 
+drop policy if exists comms_select on public.communications;
 create policy comms_select on public.communications for select to authenticated using (true);
+drop policy if exists comms_insert on public.communications;
 create policy comms_insert on public.communications for insert to authenticated with check (true);
+drop policy if exists comms_update on public.communications;
 create policy comms_update on public.communications for update to authenticated using (true) with check (true);
+drop policy if exists comms_delete on public.communications;
 create policy comms_delete on public.communications for delete to authenticated using (false);
 
+drop policy if exists tpl_select on public.message_templates;
 create policy tpl_select on public.message_templates for select to authenticated using (true);
+drop policy if exists tpl_insert on public.message_templates;
 create policy tpl_insert on public.message_templates for insert to authenticated with check (true);
+drop policy if exists tpl_update on public.message_templates;
 create policy tpl_update on public.message_templates for update to authenticated using (true) with check (true);
+drop policy if exists tpl_delete on public.message_templates;
 create policy tpl_delete on public.message_templates for delete to authenticated using (true);
 
 
@@ -556,6 +614,7 @@ create table if not exists public.campaigns (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_campaigns_updated on public.campaigns;
 create trigger tg_campaigns_updated before update on public.campaigns
   for each row execute function public.fn_set_updated_at();
 
@@ -580,6 +639,7 @@ create table if not exists public.contents (
 create index if not exists idx_contents_campaign on public.contents(campaign_id);
 create index if not exists idx_contents_status on public.contents(status);
 create index if not exists idx_contents_scheduled on public.contents(scheduled_at);
+drop trigger if exists tg_contents_updated on public.contents;
 create trigger tg_contents_updated before update on public.contents
   for each row execute function public.fn_set_updated_at();
 
@@ -604,19 +664,31 @@ alter table public.campaigns enable row level security;
 alter table public.contents enable row level security;
 alter table public.hooks_bank enable row level security;
 
+drop policy if exists camp_select on public.campaigns;
 create policy camp_select on public.campaigns for select to authenticated using (true);
+drop policy if exists camp_insert on public.campaigns;
 create policy camp_insert on public.campaigns for insert to authenticated with check (true);
+drop policy if exists camp_update on public.campaigns;
 create policy camp_update on public.campaigns for update to authenticated using (true) with check (true);
+drop policy if exists camp_delete on public.campaigns;
 create policy camp_delete on public.campaigns for delete to authenticated using (true);
 
+drop policy if exists contents_select on public.contents;
 create policy contents_select on public.contents for select to authenticated using (true);
+drop policy if exists contents_insert on public.contents;
 create policy contents_insert on public.contents for insert to authenticated with check (true);
+drop policy if exists contents_update on public.contents;
 create policy contents_update on public.contents for update to authenticated using (true) with check (true);
+drop policy if exists contents_delete on public.contents;
 create policy contents_delete on public.contents for delete to authenticated using (true);
 
+drop policy if exists hooks_select on public.hooks_bank;
 create policy hooks_select on public.hooks_bank for select to authenticated using (true);
+drop policy if exists hooks_insert on public.hooks_bank;
 create policy hooks_insert on public.hooks_bank for insert to authenticated with check (true);
+drop policy if exists hooks_update on public.hooks_bank;
 create policy hooks_update on public.hooks_bank for update to authenticated using (true) with check (true);
+drop policy if exists hooks_delete on public.hooks_bank;
 create policy hooks_delete on public.hooks_bank for delete to authenticated using (true);
 
 
@@ -656,14 +728,22 @@ alter table public.webhook_events enable row level security;
 alter table public.automations_log enable row level security;
 
 -- Service role los gestiona; authenticated solo lee
+drop policy if exists whe_select on public.webhook_events;
 create policy whe_select on public.webhook_events for select to authenticated using (true);
+drop policy if exists whe_insert on public.webhook_events;
 create policy whe_insert on public.webhook_events for insert to authenticated with check (false);
+drop policy if exists whe_update on public.webhook_events;
 create policy whe_update on public.webhook_events for update to authenticated using (false);
+drop policy if exists whe_delete on public.webhook_events;
 create policy whe_delete on public.webhook_events for delete to authenticated using (false);
 
+drop policy if exists auto_select on public.automations_log;
 create policy auto_select on public.automations_log for select to authenticated using (true);
+drop policy if exists auto_insert on public.automations_log;
 create policy auto_insert on public.automations_log for insert to authenticated with check (true);
+drop policy if exists auto_update on public.automations_log;
 create policy auto_update on public.automations_log for update to authenticated using (true) with check (true);
+drop policy if exists auto_delete on public.automations_log;
 create policy auto_delete on public.automations_log for delete to authenticated using (false);
 
 
@@ -784,14 +864,17 @@ insert into storage.buckets (id, name, public)
   values ('client_files', 'client_files', false) on conflict (id) do nothing;
 
 -- Acceso authenticated; el server firma URLs cortas.
+drop policy if exists "buckets_authenticated_read" on storage.objects;
 create policy "buckets_authenticated_read" on storage.objects
   for select to authenticated
   using (bucket_id in ('invoices','content_assets','client_files'));
 
+drop policy if exists "buckets_authenticated_write" on storage.objects;
 create policy "buckets_authenticated_write" on storage.objects
   for insert to authenticated
   with check (bucket_id in ('invoices','content_assets','client_files'));
 
+drop policy if exists "buckets_authenticated_update" on storage.objects;
 create policy "buckets_authenticated_update" on storage.objects
   for update to authenticated
   using (bucket_id in ('invoices','content_assets','client_files'))

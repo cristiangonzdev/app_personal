@@ -16,6 +16,7 @@ create table if not exists public.campaigns (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists tg_campaigns_updated on public.campaigns;
 create trigger tg_campaigns_updated before update on public.campaigns
   for each row execute function public.fn_set_updated_at();
 
@@ -40,6 +41,7 @@ create table if not exists public.contents (
 create index if not exists idx_contents_campaign on public.contents(campaign_id);
 create index if not exists idx_contents_status on public.contents(status);
 create index if not exists idx_contents_scheduled on public.contents(scheduled_at);
+drop trigger if exists tg_contents_updated on public.contents;
 create trigger tg_contents_updated before update on public.contents
   for each row execute function public.fn_set_updated_at();
 

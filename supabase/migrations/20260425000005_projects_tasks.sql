@@ -22,6 +22,7 @@ create table if not exists public.projects (
 create index if not exists idx_projects_client on public.projects(client_id);
 create index if not exists idx_projects_status on public.projects(status);
 create index if not exists idx_projects_alive on public.projects(deleted_at) where deleted_at is null;
+drop trigger if exists tg_projects_updated on public.projects;
 create trigger tg_projects_updated before update on public.projects
   for each row execute function public.fn_set_updated_at();
 
@@ -44,6 +45,7 @@ create index if not exists idx_tasks_project on public.tasks(project_id);
 create index if not exists idx_tasks_assignee on public.tasks(assignee_id);
 create index if not exists idx_tasks_status on public.tasks(status);
 create index if not exists idx_tasks_due on public.tasks(due_on);
+drop trigger if exists tg_tasks_updated on public.tasks;
 create trigger tg_tasks_updated before update on public.tasks
   for each row execute function public.fn_set_updated_at();
 
@@ -59,6 +61,7 @@ create table if not exists public.milestones (
   updated_at timestamptz not null default now()
 );
 create index if not exists idx_milestones_project on public.milestones(project_id);
+drop trigger if exists tg_milestones_updated on public.milestones;
 create trigger tg_milestones_updated before update on public.milestones
   for each row execute function public.fn_set_updated_at();
 

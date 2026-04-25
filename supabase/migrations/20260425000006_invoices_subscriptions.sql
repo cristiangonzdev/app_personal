@@ -37,6 +37,7 @@ create table if not exists public.subscriptions (
 );
 create index if not exists idx_subscriptions_client on public.subscriptions(client_id);
 create index if not exists idx_subscriptions_status on public.subscriptions(status);
+drop trigger if exists tg_subscriptions_updated on public.subscriptions;
 create trigger tg_subscriptions_updated before update on public.subscriptions
   for each row execute function public.fn_set_updated_at();
 
@@ -65,6 +66,7 @@ create table if not exists public.invoices (
 create index if not exists idx_invoices_status on public.invoices(status);
 create index if not exists idx_invoices_due on public.invoices(due_date);
 create index if not exists idx_invoices_client on public.invoices(client_id);
+drop trigger if exists tg_invoices_updated on public.invoices;
 create trigger tg_invoices_updated before update on public.invoices
   for each row execute function public.fn_set_updated_at();
 
