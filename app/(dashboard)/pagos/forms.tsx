@@ -122,12 +122,12 @@ export function InvoiceMenu({ id, status }: { id: string; status: string }) {
             {status !== 'enviada' && status !== 'pagada' && <MenuItem onClick={() => action('enviada')}>Marcar enviada</MenuItem>}
             {status !== 'anulada' && <MenuItem onClick={() => action('anulada')}>Anular</MenuItem>}
             <MenuItem destructive onClick={() => start(async () => {
-              if (!confirm('¿Archivar factura?')) return
+              if (!confirm('¿Eliminar esta factura?\n\nSe ocultará del listado pero se conserva el histórico.')) return
               const res = await archiveInvoice(id)
-              if (res.ok) toast.success('Archivada')
+              if (res.ok) toast.success('Eliminada')
               else toast.error(res.error || 'Error')
               setOpen(false)
-            })}>Archivar</MenuItem>
+            })}>Eliminar</MenuItem>
           </div>
         </>
       )}

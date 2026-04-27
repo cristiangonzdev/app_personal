@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { updateTaskStatus } from './actions'
 import { NewTaskInline, TaskDeleteButton } from './task-controls'
 import { EditProjectButton } from '../project-form'
+import { DeleteProjectButton } from '../delete-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <h1 className="text-2xl font-semibold mt-1">{project.name}</h1>
           <div className="text-[12px] text-slate-500 mt-1">{client?.commercial_name || client?.legal_name}</div>
         </div>
-        <EditProjectButton project={project} clients={clientList} />
+        <div className="flex gap-2">
+          <EditProjectButton project={project} clients={clientList} />
+          <DeleteProjectButton id={project.id} name={project.name} />
+        </div>
       </header>
 
       <Card>

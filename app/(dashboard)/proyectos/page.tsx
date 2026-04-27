@@ -4,11 +4,17 @@ import { formatFechaCorta, pickRel } from '@/lib/utils'
 import { STATUS_LABELS, SERVICE_LABELS } from '@/types'
 import Link from 'next/link'
 import { NewProjectButton } from './project-form'
+import { ProjectFilters } from './filters'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ProyectosPage() {
+type SP = Promise<{ estado?: string }>
+
+export default async function ProyectosPage({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams
+  const estado = sp.estado ?? 'activos'
   const sb = await getSupabaseServer()
+
   const [{ data: projects }, { data: tasks }, { data: clients }] = await Promise.all([
     sb.from('projects')
       .select('id,name,kind,status,starts_on,ends_on,client_id,clients(legal_name,commercial_name)')
@@ -30,14 +36,33 @@ export default async function ProyectosPage() {
     taskStats.set(t.project_id, s)
   }
 
+  const all = projects ?? []
+  let filtered = all
+  if (estado === 'activos') filtered = all.filter(p => p.status === 'planificado' || p.status === 'en_curso' || p.status === 'pausado')
+  else if (estado === 'entregados') filtered = all.filter(p => p.status === 'entregado')
+  else if (estado === 'cancelados') filtered = all.filter(p => p.status === 'cancelado')
+
+  const counts = {
+    todos: all.length,
+    activos: all.filter(p => p.status === 'planificado' || p.status === 'en_curso' || p.status === 'pausado').length,
+    entregados: all.filter(p => p.status === 'entregado').length,
+    cancelados: all.filter(p => p.status === 'cancelado').length,
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
-      <header className="flex items-end justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Proyectos</h1>
+      <header className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Proyectos</h1>
+          <p className="text-[12px] text-slate-500 mt-0.5">{counts.activos} activos · {counts.entregados} entregados</p>
+        </div>
         <NewProjectButton clients={clientOptions} />
       </header>
+
+      <ProjectFilters active={estado} counts={counts} />
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {(projects ?? []).map(p => {
+        {filtered.map(p => {
           const stats = taskStats.get(p.id) ?? { done: 0, total: 0 }
           const pct = stats.total > 0 ? Math.round(stats.done / stats.total * 100) : 0
           const client = pickRel((p as unknown as { clients: { legal_name: string; commercial_name: string | null } | { legal_name: string; commercial_name: string | null }[] | null }).clients)
@@ -67,8 +92,10 @@ export default async function ProyectosPage() {
             </Link>
           )
         })}
-        {(projects ?? []).length === 0 && (
-          <div className="col-span-full text-[12px] text-slate-600 text-center py-8">Sin proyectos. Cierra un deal para crear uno.</div>
+        {filtered.length === 0 && (
+          <div className="col-span-full text-[12px] text-slate-600 text-center py-8">
+            {estado === 'activos' ? 'Sin proyectos activos. Cierra un deal o crea uno nuevo.' : 'Sin proyectos en esta vista.'}
+          </div>
         )}
       </div>
     </div>

@@ -5,8 +5,9 @@ import { STATUS_LABELS, type ProjectStatus, type InvoiceStatus } from '@/types'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { EditClientButton } from '../client-form'
-import { ArchiveClientButton } from '../archive-button'
+import { DeleteClientButton } from '../archive-button'
 import { ContactForm, ContactDeleteButton } from './contact-controls'
+import { QuickActions } from './quick-actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,8 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
   if (!client) notFound()
 
   const mrr = (subs ?? []).filter(s => s.status === 'activa').reduce((s, x) => s + Number(x.amount_monthly), 0)
+  const subsActivas = (subs ?? []).filter(s => s.status === 'activa').length
+  const invoicesPendientes = (invoices ?? []).filter(i => i.status !== 'pagada' && i.status !== 'anulada').length
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -41,8 +44,14 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
         <div className="flex gap-2">
+          <QuickActions clientId={client.id} clientName={client.commercial_name || client.legal_name} />
           <EditClientButton client={client} />
-          <ArchiveClientButton id={client.id} redirect="/clientes" />
+          <DeleteClientButton
+            id={client.id}
+            name={client.commercial_name || client.legal_name}
+            redirect="/clientes"
+            stats={{ invoicesPendientes, subsActivas, mrr }}
+          />
         </div>
       </header>
 

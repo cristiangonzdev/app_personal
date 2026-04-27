@@ -119,14 +119,14 @@ export function Kanban({ initialDeals, clients }: { initialDeals: Deal[]; client
                               <button
                                 onClick={async (e) => {
                                   e.stopPropagation()
-                                  if (!confirm('¿Archivar este deal?')) return
+                                  if (!confirm(`¿Eliminar el deal "${d.title}"?\n\nSe ocultará del pipeline. Si necesitas recuperarlo más adelante, contacta soporte.`)) return
                                   const res = await archiveDeal(d.id)
-                                  if (res.ok) { toast.success('Deal archivado'); setDeals(prev => prev.filter(x => x.id !== d.id)) }
+                                  if (res.ok) { toast.success('Deal eliminado'); setDeals(prev => prev.filter(x => x.id !== d.id)) }
                                   else toast.error(res.error || 'Error')
                                 }}
                                 className="text-[10px] text-slate-600 hover:text-accent-red flex items-center gap-1"
                               >
-                                <Trash2 size={11} />Archivar
+                                <Trash2 size={11} />Eliminar
                               </button>
                             </div>
                           </div>
