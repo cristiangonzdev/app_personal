@@ -3,11 +3,14 @@
 import { z } from 'zod'
 import { getSupabaseServer } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { emitEvent } from '@/lib/n8n'
+
+// ── Cliente CRUD ────────────────────────────────────────────────────────
 
 const clientSchema = z.object({
   legal_name: z.string().min(2, 'Razón social mínimo 2 caracteres'),
   commercial_name: z.string().optional().nullable(),
-  client_type: z.enum(['lead', 'one_shot', 'recurrente']).default('lead'),
+  client_type: z.enum(['lead', 'one_shot', 'recurrente']).default('one_shot'),
   fiscal_id: z.string().optional().nullable(),
   igic: z.union([z.literal('on'), z.literal(''), z.boolean()]).optional().transform(v => v === 'on' || v === true),
   fiscal_address: z.string().optional().nullable(),
@@ -22,10 +25,10 @@ const clientSchema = z.object({
 export async function createClient(formData: FormData) {
   const parsed = clientSchema.parse(Object.fromEntries(formData))
   const sb = await getSupabaseServer()
-  const { error } = await sb.from('clients').insert(parsed)
+  const { data, error } = await sb.from('clients').insert(parsed).select('id').single()
   if (error) return { ok: false, error: error.message }
   revalidatePath('/clientes')
-  return { ok: true }
+  return { ok: true, id: data.id as string }
 }
 
 export async function updateClient(id: string, formData: FormData) {
@@ -45,6 +48,8 @@ export async function archiveClient(id: string) {
   revalidatePath('/clientes')
   return { ok: true }
 }
+
+// ── Contactos ───────────────────────────────────────────────────────────
 
 const contactSchema = z.object({
   client_id: z.string().uuid(),
@@ -72,9 +77,9 @@ export async function deleteContact(id: string, clientId: string) {
   return { ok: true }
 }
 
-// ── Quick actions desde la ficha del cliente ─────────────────────────
+// ── Facturas ────────────────────────────────────────────────────────────
 
-const quickInvoiceSchema = z.object({
+const invoiceSchema = z.object({
   client_id: z.string().uuid(),
   description: z.string().min(2),
   subtotal: z.coerce.number().nonnegative(),
@@ -83,8 +88,8 @@ const quickInvoiceSchema = z.object({
   emit: z.union([z.literal('on'), z.literal(''), z.boolean()]).optional().transform(v => v === 'on' || v === true),
 })
 
-export async function quickInvoice(formData: FormData) {
-  const parsed = quickInvoiceSchema.parse(Object.fromEntries(formData))
+export async function createInvoice(formData: FormData) {
+  const parsed = invoiceSchema.parse(Object.fromEntries(formData))
   const sb = await getSupabaseServer()
 
   const igic_amount = +(parsed.subtotal * parsed.igic_pct / 100).toFixed(2)
@@ -116,12 +121,49 @@ export async function quickInvoice(formData: FormData) {
     invoice_id: inv.id, description: parsed.description, qty: 1, unit_price: parsed.subtotal,
   })
 
+  if (parsed.emit) await emitEvent('invoice.created', { invoice_id: inv.id, number, total })
   revalidatePath(`/clientes/${parsed.client_id}`)
-  revalidatePath('/pagos')
+  revalidatePath('/clientes')
+  revalidatePath('/')
   return { ok: true }
 }
 
-const quickSubSchema = z.object({
+export async function setInvoiceStatus(
+  id: string,
+  status: 'borrador' | 'emitida' | 'enviada' | 'pagada' | 'vencida' | 'anulada',
+  clientId: string,
+) {
+  const sb = await getSupabaseServer()
+  const patch: Record<string, unknown> = { status }
+  if (status === 'pagada') patch.paid_at = new Date().toISOString().slice(0, 10)
+  if (status === 'emitida') {
+    const { data: cur } = await sb.from('invoices').select('number').eq('id', id).single()
+    if (cur && !(cur as { number: string | null }).number) {
+      const { data: n } = await sb.rpc('fn_next_invoice_number' as never, { p_year: new Date().getFullYear() } as never)
+      patch.number = String(n)
+      patch.issue_date = new Date().toISOString().slice(0, 10)
+    }
+  }
+  const { error } = await sb.from('invoices').update(patch).eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  if (status === 'pagada') await emitEvent('invoice.paid', { invoice_id: id })
+  revalidatePath(`/clientes/${clientId}`)
+  revalidatePath('/clientes')
+  revalidatePath('/')
+  return { ok: true }
+}
+
+export async function archiveInvoice(id: string, clientId: string) {
+  const sb = await getSupabaseServer()
+  const { error } = await sb.from('invoices').update({ deleted_at: new Date().toISOString() }).eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath(`/clientes/${clientId}`)
+  return { ok: true }
+}
+
+// ── Suscripciones ───────────────────────────────────────────────────────
+
+const subSchema = z.object({
   client_id: z.string().uuid(),
   service: z.enum(['software_custom', 'chatbot', 'web', 'social_media_management']),
   amount_monthly: z.coerce.number().positive(),
@@ -129,36 +171,27 @@ const quickSubSchema = z.object({
   description: z.string().optional().nullable(),
 })
 
-export async function quickSubscription(formData: FormData) {
-  const parsed = quickSubSchema.parse(Object.fromEntries(formData))
+export async function createSubscription(formData: FormData) {
+  const parsed = subSchema.parse(Object.fromEntries(formData))
   const sb = await getSupabaseServer()
-  const { error } = await sb.from('subscriptions').insert({ ...parsed, status: 'activa' })
+  const { error } = await sb.from('subscriptions').insert({ ...parsed, status: 'activa', igic_pct: 7 })
   if (error) return { ok: false, error: error.message }
+  // si el cliente estaba marcado como lead/one_shot, lo promovemos a recurrente
+  await sb.from('clients').update({ client_type: 'recurrente' }).eq('id', parsed.client_id)
   revalidatePath(`/clientes/${parsed.client_id}`)
-  revalidatePath('/pagos')
+  revalidatePath('/clientes')
+  revalidatePath('/')
   return { ok: true }
 }
 
-const quickProjectSchema = z.object({
-  client_id: z.string().uuid(),
-  name: z.string().min(2),
-  kind: z.enum(['software_custom', 'chatbot', 'web', 'social_media_management']),
-  starts_on: z.string().optional().nullable().transform(v => v || null),
-})
-
-export async function quickProject(formData: FormData) {
-  const parsed = quickProjectSchema.parse(Object.fromEntries(formData))
+export async function setSubscriptionStatus(id: string, status: 'activa' | 'pausada' | 'cancelada', clientId: string) {
   const sb = await getSupabaseServer()
-  const { data, error } = await sb.from('projects').insert({ ...parsed, status: 'planificado' }).select('id').single()
+  const patch: Record<string, unknown> = { status }
+  if (status === 'cancelada') patch.ends_on = new Date().toISOString().slice(0, 10)
+  const { error } = await sb.from('subscriptions').update(patch).eq('id', id)
   if (error) return { ok: false, error: error.message }
-
-  const { data: tpl } = await sb.from('project_templates').select('task_titles').eq('kind', parsed.kind).maybeSingle()
-  if (tpl && Array.isArray((tpl as { task_titles: string[] }).task_titles)) {
-    const titles = (tpl as { task_titles: string[] }).task_titles
-    await sb.from('tasks').insert(titles.map(t => ({ project_id: data.id, title: t })))
-  }
-
-  revalidatePath(`/clientes/${parsed.client_id}`)
-  revalidatePath('/proyectos')
+  revalidatePath(`/clientes/${clientId}`)
+  revalidatePath('/clientes')
+  revalidatePath('/')
   return { ok: true }
 }

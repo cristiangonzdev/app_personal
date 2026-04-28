@@ -1,7 +1,9 @@
 import { getSupabaseServer } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Badge, Card } from '@/components/ui'
-import { formatEuros, formatFechaCorta } from '@/lib/utils'
+import { Card, Badge } from '@/components/ui'
+import { formatEuros, formatFechaCorta, isVencida } from '@/lib/utils'
+import { SERVICE_LABELS, type ServiceKind } from '@/types'
+import { Users, Repeat, AlertCircle, ArrowRight } from 'lucide-react'
 import { NewClientButton } from './client-form'
 import { ClientFilters } from './filters'
 
@@ -9,26 +11,56 @@ export const dynamic = 'force-dynamic'
 
 type SP = Promise<{ q?: string; tipo?: string }>
 
+type SubRow = { client_id: string; service: ServiceKind; amount_monthly: number; status: string; starts_on: string }
+type InvoiceRow = { client_id: string; status: string; total: number; due_date: string | null }
+
 export default async function ClientesPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams
   const q = (sp.q ?? '').trim()
   const tipo = sp.tipo ?? 'todos'
   const sb = await getSupabaseServer()
 
-  const { data: clients } = await sb
-    .from('clients')
-    .select('id,legal_name,commercial_name,client_type,sector,igic,tags,created_at')
-    .is('deleted_at', null)
-    .order('legal_name')
+  const [{ data: clients }, { data: subs }, { data: invoices }] = await Promise.all([
+    sb.from('clients').select('id,legal_name,commercial_name,client_type,sector,igic,created_at')
+      .is('deleted_at', null).neq('client_type', 'lead').order('legal_name'),
+    sb.from('subscriptions').select('client_id,service,amount_monthly,status,starts_on'),
+    sb.from('invoices').select('client_id,status,total,due_date').is('deleted_at', null),
+  ])
 
-  const { data: subs } = await sb
-    .from('subscriptions')
-    .select('client_id, amount_monthly, status')
-    .eq('status', 'activa')
-
+  const subsByClient = new Map<string, SubRow[]>()
   const mrrByClient = new Map<string, number>()
-  for (const s of subs ?? []) {
-    mrrByClient.set(s.client_id, (mrrByClient.get(s.client_id) ?? 0) + Number(s.amount_monthly))
+  for (const s of (subs ?? []) as SubRow[]) {
+    const list = subsByClient.get(s.client_id) ?? []
+    list.push(s)
+    subsByClient.set(s.client_id, list)
+    if (s.status === 'activa') {
+      mrrByClient.set(s.client_id, (mrrByClient.get(s.client_id) ?? 0) + Number(s.amount_monthly))
+    }
+  }
+
+  const pendingByClient = new Map<string, { count: number; total: number; overdue: number }>()
+  for (const i of (invoices ?? []) as InvoiceRow[]) {
+    if (i.status === 'pagada' || i.status === 'anulada') continue
+    const cur = pendingByClient.get(i.client_id) ?? { count: 0, total: 0, overdue: 0 }
+    cur.count += 1
+    cur.total += Number(i.total)
+    if (isVencida(i.due_date)) cur.overdue += 1
+    pendingByClient.set(i.client_id, cur)
+  }
+
+  // Próximo cobro (día del mes de la sub activa más próxima)
+  const today = new Date()
+  function nextChargeFor(clientId: string): { date: Date; amount: number } | null {
+    const list = (subsByClient.get(clientId) ?? []).filter(s => s.status === 'activa')
+    if (!list.length) return null
+    const candidates = list.map(s => {
+      const dom = parseInt(s.starts_on.slice(8, 10), 10)
+      const candidate = new Date(today.getFullYear(), today.getMonth(), dom)
+      if (candidate < today) candidate.setMonth(candidate.getMonth() + 1)
+      return { date: candidate, amount: Number(s.amount_monthly) }
+    })
+    candidates.sort((a, b) => a.date.getTime() - b.date.getTime())
+    return candidates[0] ?? null
   }
 
   let filtered = clients ?? []
@@ -42,7 +74,6 @@ export default async function ClientesPage({ searchParams }: { searchParams: SP 
     )
   }
 
-  // Recurrentes primero, luego por MRR descendente, luego por nombre
   filtered.sort((a, b) => {
     if (a.client_type === 'recurrente' && b.client_type !== 'recurrente') return -1
     if (b.client_type === 'recurrente' && a.client_type !== 'recurrente') return 1
@@ -56,70 +87,132 @@ export default async function ClientesPage({ searchParams }: { searchParams: SP 
     todos: clients?.length ?? 0,
     recurrente: clients?.filter(c => c.client_type === 'recurrente').length ?? 0,
     one_shot: clients?.filter(c => c.client_type === 'one_shot').length ?? 0,
-    lead: clients?.filter(c => c.client_type === 'lead').length ?? 0,
   }
-  const totalMrr = (subs ?? []).reduce((s, x) => s + Number(x.amount_monthly), 0)
+  const totalMrr = (subs ?? []).filter(s => s.status === 'activa').reduce((s, x) => s + Number(x.amount_monthly), 0)
+  const totalPending = Array.from(pendingByClient.values()).reduce((s, x) => s + x.total, 0)
+  const totalOverdue = Array.from(pendingByClient.values()).reduce((s, x) => s + x.overdue, 0)
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <header className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            {counts.todos} cuentas · {counts.recurrente} recurrente(s) · MRR total <span className="font-mono text-accent-green">{formatEuros(totalMrr)}</span>
+          <h1 className="text-3xl font-semibold tracking-tight flex items-center gap-2">
+            <Users size={22} className="text-accent-cyan" />Clientes
+          </h1>
+          <p className="text-[12px] text-slate-500 mt-1">
+            {counts.todos} cuentas · {counts.recurrente} recurrente(s)
           </p>
         </div>
         <NewClientButton />
       </header>
 
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <Stat label="MRR activo" value={formatEuros(totalMrr)} sub={`${formatEuros(totalMrr * 12)} ARR`} accent="green" icon={Repeat} />
+        <Stat label="Por cobrar" value={formatEuros(totalPending)} sub={`${Array.from(pendingByClient.values()).reduce((s, x) => s + x.count, 0)} factura(s)`} accent="cyan" />
+        <Stat label="Vencidas" value={String(totalOverdue)} sub={totalOverdue > 0 ? 'requieren acción' : 'al día' } accent={totalOverdue > 0 ? 'red' : 'slate'} icon={totalOverdue > 0 ? AlertCircle : undefined} />
+      </div>
+
       <ClientFilters active={tipo} q={q} counts={counts} />
 
-      <Card className="p-0 overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="text-[12px] text-slate-600 text-center py-10">
-            {q || tipo !== 'todos' ? 'Sin resultados con esos filtros' : 'Sin clientes. Empieza creando uno arriba.'}
+      {filtered.length === 0 ? (
+        <Card className="py-16">
+          <div className="text-center">
+            <Users size={32} className="mx-auto text-slate-700 mb-3" />
+            <div className="text-[14px] text-slate-400">{q || tipo !== 'todos' ? 'Sin resultados con esos filtros' : 'Sin clientes. Empieza creando uno.'}</div>
           </div>
-        ) : (
-          <table className="w-full text-[12px]">
-            <thead className="text-[10px] uppercase tracking-wider text-slate-500 bg-bg-surface2/30">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-normal">Cliente</th>
-                <th className="text-left font-normal">Tipo</th>
-                <th className="text-left font-normal">Sector</th>
-                <th className="text-right font-normal">MRR</th>
-                <th className="text-left font-normal pl-3">IGIC</th>
-                <th className="text-right px-4 font-normal">Alta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => {
-                const mrr = mrrByClient.get(c.id) ?? 0
-                return (
-                  <tr key={c.id} className="border-t border-border/50 hover:bg-bg-surface2/30 transition-colors">
-                    <td className="px-4 py-2.5">
-                      <Link href={`/clientes/${c.id}`} className="text-slate-200 hover:text-accent-cyan">
+        </Card>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-3">
+          {filtered.map(c => {
+            const mrr = mrrByClient.get(c.id) ?? 0
+            const pending = pendingByClient.get(c.id) ?? { count: 0, total: 0, overdue: 0 }
+            const subList = (subsByClient.get(c.id) ?? []).filter(s => s.status === 'activa')
+            const services = Array.from(new Set(subList.map(s => s.service)))
+            const next = nextChargeFor(c.id)
+            return (
+              <Link
+                key={c.id}
+                href={`/clientes/${c.id}`}
+                className="group rounded-xl border border-border/60 bg-bg-surface/40 backdrop-blur-md p-5 hover:border-accent-cyan/40 hover:bg-bg-surface/70 transition-all"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[15px] font-medium text-slate-100 truncate group-hover:text-accent-cyan transition-colors">
                         {c.commercial_name || c.legal_name}
-                      </Link>
-                      {c.commercial_name && (
-                        <div className="text-[10px] text-slate-600 mt-0.5">{c.legal_name}</div>
-                      )}
-                    </td>
-                    <td>
-                      <Badge tone={c.client_type === 'recurrente' ? 'green' : c.client_type === 'one_shot' ? 'cyan' : 'slate'}>
-                        {c.client_type === 'recurrente' ? 'Recurrente' : c.client_type === 'one_shot' ? 'One-shot' : 'Lead'}
+                      </h3>
+                      <Badge tone={c.client_type === 'recurrente' ? 'green' : 'cyan'}>
+                        {c.client_type === 'recurrente' ? 'Recurrente' : 'One-shot'}
                       </Badge>
-                    </td>
-                    <td className="text-slate-400 capitalize">{c.sector ?? '—'}</td>
-                    <td className="text-right font-mono text-accent-green">{mrr > 0 ? formatEuros(mrr) : <span className="text-slate-700">—</span>}</td>
-                    <td className="pl-3"><span className="text-[11px]">{c.igic ? '7%' : '—'}</span></td>
-                    <td className="text-right px-4 font-mono text-slate-600">{formatFechaCorta(c.created_at)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
+                    </div>
+                    {c.sector && <p className="text-[11px] text-slate-500 mt-1 capitalize">{c.sector}</p>}
+
+                    {services.length > 0 && (
+                      <div className="flex gap-1.5 mt-2.5 flex-wrap">
+                        {services.map(s => (
+                          <span key={s} className="text-[10px] px-2 py-0.5 rounded bg-bg-surface2/60 text-slate-300 border border-border/40">
+                            {SERVICE_LABELS[s]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <ArrowRight size={14} className="text-slate-700 group-hover:text-accent-cyan transition-colors mt-1" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border/40">
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-600">MRR</div>
+                    <div className="text-[14px] font-mono text-accent-green mt-0.5">{mrr > 0 ? formatEuros(mrr) : <span className="text-slate-700">—</span>}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-600">Próx. cobro</div>
+                    <div className="text-[14px] font-mono text-slate-200 mt-0.5">
+                      {next ? (
+                        <>
+                          {formatFechaCorta(next.date.toISOString())}
+                          <span className="text-[10px] text-slate-500 ml-1">{formatEuros(next.amount)}</span>
+                        </>
+                      ) : <span className="text-slate-700">—</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-600">Por cobrar</div>
+                    <div className={`text-[14px] font-mono mt-0.5 ${pending.overdue > 0 ? 'text-accent-red' : pending.count > 0 ? 'text-accent-cyan' : 'text-slate-700'}`}>
+                      {pending.count > 0 ? formatEuros(pending.total) : '—'}
+                      {pending.overdue > 0 && <span className="text-[9px] ml-1">·{pending.overdue} vencida</span>}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, accent, icon: Icon }: {
+  label: string
+  value: string
+  sub?: string
+  accent: 'cyan' | 'green' | 'red' | 'slate'
+  icon?: React.ElementType
+}) {
+  const map: Record<string, string> = {
+    cyan: 'text-accent-cyan',
+    green: 'text-accent-green',
+    red: 'text-accent-red',
+    slate: 'text-slate-300',
+  }
+  return (
+    <div className="rounded-xl border border-border/60 bg-bg-surface/40 backdrop-blur-md p-4">
+      <div className="text-[10px] uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+        {Icon && <Icon size={11} />}{label}
+      </div>
+      <div className={`mt-1.5 font-mono text-[22px] font-semibold ${map[accent]}`}>{value}</div>
+      {sub && <div className="text-[10px] text-slate-600 mt-0.5">{sub}</div>}
     </div>
   )
 }

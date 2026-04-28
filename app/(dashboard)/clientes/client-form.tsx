@@ -62,8 +62,7 @@ function ClientFormButton({ mode, client, trigger }: { mode: 'create' | 'edit'; 
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tipo">
-              <Select name="client_type" defaultValue={c.client_type ?? 'lead'}>
-                <option value="lead">Lead</option>
+              <Select name="client_type" defaultValue={c.client_type ?? 'one_shot'}>
                 <option value="one_shot">One-shot</option>
                 <option value="recurrente">Recurrente</option>
               </Select>

@@ -3,39 +3,27 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-type Counts = {
-  pendientes: number
-  vencidas: number
-  pagadas: number
-  borradores: number
-  todas: number
-}
-
-const TABS: { key: keyof Counts; label: string }[] = [
-  { key: 'pendientes', label: 'Por cobrar' },
-  { key: 'vencidas', label: 'Vencidas' },
-  { key: 'pagadas', label: 'Pagadas' },
-  { key: 'borradores', label: 'Borradores' },
-  { key: 'todas', label: 'Todas' },
-]
-
-export function InvoiceFilter({ active, counts }: { active: string; counts: Counts }) {
+export function FilterTabs({ param, active, options }: {
+  param: string
+  active: string
+  options: { key: string; label: string; count?: number }[]
+}) {
   const router = useRouter()
   const path = usePathname()
   const sp = useSearchParams()
 
-  const setFilter = (k: string) => {
+  const setKey = (k: string) => {
     const params = new URLSearchParams(sp.toString())
-    params.set('filter', k)
+    if (k === 'todos') params.delete(param); else params.set(param, k)
     router.replace(`${path}?${params.toString()}`, { scroll: false })
   }
 
   return (
-    <div className="flex gap-1 text-[11px]">
-      {TABS.map(t => (
+    <div className="flex gap-1 text-[11px] flex-wrap">
+      {options.map(t => (
         <button
           key={t.key}
-          onClick={() => setFilter(t.key)}
+          onClick={() => setKey(t.key)}
           className={cn(
             'px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5',
             active === t.key
@@ -44,7 +32,7 @@ export function InvoiceFilter({ active, counts }: { active: string; counts: Coun
           )}
         >
           {t.label}
-          <span className="text-[9px] font-mono text-slate-600">{counts[t.key]}</span>
+          {t.count != null && <span className="text-[9px] font-mono text-slate-600">{t.count}</span>}
         </button>
       ))}
     </div>
